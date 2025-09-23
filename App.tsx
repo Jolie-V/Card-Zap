@@ -1,18 +1,54 @@
 import React, { useState, useCallback } from 'react';
-import { AppState, CardColor, ClassicFlashcard, GameMode, QuizFlashcard, StudyResult } from './types';
+import { AppState, CardColor, ClassicFlashcard, GameMode, QuizFlashcard, StudyResult, User, UserRole } from './types';
 import SetupForm from './components/SetupForm';
 import { generateFlashcards } from './services/geminiService';
 import LoadingView from './components/LoadingView';
 import StudySession from './components/StudySession';
 import ResultsScreen from './components/ResultsScreen';
 import EditCardsView from './components/EditCardsView';
+import LoginPage from './components/LoginPage';
+import DashboardLayout from './components/DashboardLayout';
+import YourCardsPage from './components/YourCardsPage';
+import AdminDashboard from './components/AdminDashboard';
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>(AppState.FORM);
+  const [user, setUser] = useState<User | null>(null);
+  const [appState, setAppState] = useState<AppState>(AppState.LOGIN);
   const [flashcards, setFlashcards] = useState<(ClassicFlashcard | QuizFlashcard)[]>([]);
   const [studyResults, setStudyResults] = useState<StudyResult[]>([]);
   const [deckConfig, setDeckConfig] = useState<{title: string, color: CardColor, mode: GameMode} | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  const handleLogin = useCallback((loggedInUser: User) => {
+    setUser(loggedInUser);
+    if (loggedInUser.role === UserRole.ADMIN) {
+      setAppState(AppState.ADMIN_DASHBOARD);
+    } else {
+      setAppState(AppState.YOUR_CARDS);
+    }
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    setUser(null);
+    setAppState(AppState.LOGIN);
+    // Reset all state
+    setFlashcards([]);
+    setStudyResults([]);
+    setDeckConfig(null);
+    setError(null);
+  }, []);
+
+  const handleStartCreateNew = useCallback(() => {
+    setAppState(AppState.FORM);
+  }, []);
+
+  const handleBackToDecks = useCallback(() => {
+     setFlashcards([]);
+     setStudyResults([]);
+     setDeckConfig(null);
+     setError(null);
+     setAppState(AppState.YOUR_CARDS);
+  }, []);
 
   const handleFormSubmit = useCallback(async (
     title: string,
@@ -51,19 +87,14 @@ const App: React.FC = () => {
     setAppState(AppState.STUDYING);
   }, []);
 
-  const handleCreateNew = useCallback(() => {
-    setFlashcards([]);
-    setStudyResults([]);
-    setDeckConfig(null);
-    setError(null);
-    setAppState(AppState.FORM);
-  }, []);
-
-
-  const renderContent = () => {
+  const renderDashboardContent = () => {
     switch (appState) {
+      case AppState.YOUR_CARDS:
+        return <YourCardsPage onCreateNew={handleStartCreateNew} />;
+      case AppState.ADMIN_DASHBOARD:
+        return <AdminDashboard />;
       case AppState.FORM:
-        return <SetupForm onSubmit={handleFormSubmit} error={error} />;
+        return <SetupForm onSubmit={handleFormSubmit} error={error} onBack={handleBackToDecks} />;
       case AppState.GENERATING:
         return <LoadingView />;
       case AppState.EDITING:
@@ -94,20 +125,30 @@ const App: React.FC = () => {
         return <ResultsScreen 
                   results={studyResults} 
                   onRestart={handleRestart} 
-                  onCreateNew={handleCreateNew} 
+                  onBackToDecks={handleBackToDecks} 
                   title={deckConfig?.title || 'Study Results'}
                 />;
       default:
-        return <SetupForm onSubmit={handleFormSubmit} error={error} />;
+        // If logged in, but in a weird state, default to the main page for their role.
+        if (user?.role === UserRole.ADMIN) {
+          return <AdminDashboard />;
+        }
+        return <YourCardsPage onCreateNew={handleStartCreateNew} />;
     }
   };
 
+  if (!user) {
+    return (
+       <div className="bg-primary-100 text-primary-700 min-h-screen font-sans flex items-center justify-center p-4">
+          <LoginPage onLogin={handleLogin} />
+       </div>
+    );
+  }
+
   return (
-    <div className="bg-slate-900 text-white min-h-screen font-sans flex flex-col items-center justify-center p-4">
-      <main className="w-full max-w-4xl mx-auto my-8">
-        {renderContent()}
-      </main>
-    </div>
+    <DashboardLayout user={user} onLogout={handleLogout}>
+      {renderDashboardContent()}
+    </DashboardLayout>
   );
 };
 

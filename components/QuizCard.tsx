@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { CardColor, QuizFlashcard } from '../types';
 import { CARD_COLORS } from '../constants';
@@ -26,15 +25,15 @@ const QuizCard: React.FC<QuizCardProps> = ({ card, onAnswer, color }) => {
 
     const getOptionClass = (option: string) => {
         if (!isAnswered) {
-            return 'bg-slate-700 hover:bg-slate-600';
+            return 'bg-white hover:bg-primary-100 text-primary-600 border border-primary-300';
         }
         if (option === card.correctAnswer) {
-            return 'bg-green-600 ring-2 ring-green-400';
+            return 'bg-green-600 text-white ring-2 ring-green-400 border-green-600';
         }
         if (option === selectedAnswer) {
-            return 'bg-red-600 ring-2 ring-red-400';
+            return 'bg-red-600 text-white ring-2 ring-red-400 border-red-600';
         }
-        return 'bg-slate-700 opacity-60';
+        return 'bg-white text-primary-600 opacity-70 border border-primary-300';
     };
 
     return (
@@ -54,7 +53,7 @@ const QuizCard: React.FC<QuizCardProps> = ({ card, onAnswer, color }) => {
                         key={index}
                         onClick={() => handleOptionClick(option)}
                         disabled={isAnswered}
-                        className={`p-4 rounded-lg text-left transition-all text-white text-lg ${getOptionClass(option)} disabled:cursor-not-allowed`}
+                        className={`p-4 rounded-lg text-left transition-all text-lg ${getOptionClass(option)} disabled:cursor-not-allowed`}
                     >
                         {option}
                     </button>

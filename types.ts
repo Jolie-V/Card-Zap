@@ -1,4 +1,7 @@
 export enum AppState {
+  LOGIN = 'LOGIN',
+  YOUR_CARDS = 'YOUR_CARDS',
+  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
   FORM = 'FORM',
   GENERATING = 'GENERATING',
   EDITING = 'EDITING',
@@ -20,6 +23,17 @@ export enum CardColor {
   Blue = 'blue',
   Purple = 'purple',
   Gray = 'gray',
+}
+
+export enum UserRole {
+  STUDENT = 'Student',
+  TEACHER = 'Teacher',
+  ADMIN = 'Admin',
+}
+
+export interface User {
+  email: string;
+  role: UserRole;
 }
 
 export interface ClassicFlashcard {

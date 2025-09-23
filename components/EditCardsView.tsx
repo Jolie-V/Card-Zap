@@ -54,15 +54,15 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
   return (
     <div className="w-full max-w-4xl mx-auto">
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-primary-600">
           Review & Edit Flashcards
         </h1>
-        <p className="text-slate-400">Fine-tune your deck before you start studying.</p>
+        <p className="text-primary-500">Fine-tune your deck before you start studying.</p>
       </div>
 
       <div className="space-y-4 mb-8">
         {cards.map((card, index) => (
-          <div key={index} className="bg-slate-800 p-6 rounded-lg shadow-md relative group animate-[fade-in-up_0.5s_ease-out] transition-all" style={{ animationDelay: `${index * 50}ms` }}>
+          <div key={index} className="bg-white p-6 rounded-lg shadow-md relative group animate-[fade-in-up_0.5s_ease-out] transition-all border border-primary-200" style={{ animationDelay: `${index * 50}ms` }}>
             <style>{`
                 @keyframes fade-in-up {
                     from { opacity: 0; transform: translateY(20px); }
@@ -71,12 +71,12 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
             `}</style>
             <button
               onClick={() => handleDeleteCard(index)}
-              className="absolute top-3 right-3 text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+              className="absolute top-3 right-3 text-primary-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
               aria-label="Delete card"
             >
               <TrashIcon className="w-6 h-6" />
             </button>
-            <h3 className="text-slate-400 font-bold mb-2">Card {index + 1}</h3>
+            <h3 className="text-primary-500 font-bold mb-2">Card {index + 1}</h3>
             
             <div className="space-y-4">
               <textarea
@@ -84,7 +84,7 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
                 onChange={(e) => handleCardChange(index, 'question', e.target.value)}
                 placeholder="Question"
                 rows={2}
-                className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-primary-100 border border-primary-300 rounded-md px-3 py-2 text-primary-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
               />
 
               {deckConfig.mode === GameMode.CLASSIC && 'answer' in card && (
@@ -93,13 +93,13 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
                   onChange={(e) => handleCardChange(index, 'answer', e.target.value)}
                   placeholder="Answer"
                   rows={2}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-primary-100 border border-primary-300 rounded-md px-3 py-2 text-primary-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                 />
               )}
 
               {deckConfig.mode === GameMode.QUIZ && 'options' in card && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-slate-300">Options (Select the correct one)</p>
+                  <p className="text-sm font-medium text-primary-600">Options (Select the correct one)</p>
                   {(card as QuizFlashcard).options.map((option, optIndex) => (
                     <div key={optIndex} className="flex items-center gap-3">
                        <input
@@ -107,14 +107,14 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
                          name={`correct-answer-${index}`}
                          checked={option === card.correctAnswer}
                          onChange={() => handleCardChange(index, 'correctAnswer', option)}
-                         className="form-radio h-5 w-5 text-green-500 bg-slate-600 border-slate-500 focus:ring-green-500 cursor-pointer"
+                         className="form-radio h-5 w-5 text-green-500 bg-primary-200 border-primary-400 focus:ring-green-500 cursor-pointer"
                        />
                        <input
                         type="text"
                         value={option}
                         onChange={(e) => handleCardChange(index, 'options', e.target.value, optIndex)}
                         placeholder={`Option ${optIndex + 1}`}
-                        className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-blue-500"
+                        className="w-full bg-primary-100 border border-primary-300 rounded-md px-3 py-2 text-primary-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                       />
                     </div>
                   ))}
@@ -128,14 +128,14 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
       <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
         <button
           onClick={handleAddCard}
-          className="flex items-center justify-center gap-2 w-full sm:w-auto text-lg font-bold bg-slate-600 text-white rounded-lg py-3 px-6 transition-colors hover:bg-slate-500"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto text-lg font-bold bg-primary-300 text-primary-600 rounded-lg py-3 px-6 transition-colors hover:bg-primary-400/80"
         >
           <PlusCircleIcon className="w-6 h-6" />
           Add Card
         </button>
         <button
           onClick={() => onComplete(cards)}
-          className="w-full sm:w-auto text-lg font-bold bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg py-3 px-6 transition-all hover:from-blue-600 hover:to-purple-700"
+          className="w-full sm:w-auto text-lg font-bold bg-gradient-to-r from-primary-400 to-primary-600 text-white rounded-lg py-3 px-6 transition-all hover:from-primary-500 hover:to-primary-700"
         >
           Start Study Session
         </button>
