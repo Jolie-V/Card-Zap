@@ -32,8 +32,18 @@ export enum UserRole {
 }
 
 export interface User {
+  id: string;
   email: string;
   role: UserRole;
+}
+
+export interface Deck {
+  id: number;
+  user_id: string;
+  title: string;
+  color: CardColor;
+  mode: GameMode;
+  created_at: string;
 }
 
 export interface ClassicFlashcard {

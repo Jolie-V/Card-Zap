@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, UserRole } from '../types';
-import { CardZapLogo, DashboardIcon, CardsIcon, LogoutIcon, CloseIcon, UserGroupIcon, AcademicCapIcon, BookOpenIcon } from './icons';
+import { CardZapLogo, DashboardIcon, CardsIcon, LogoutIcon, CloseIcon, UserGroupIcon, AcademicCapIcon, BookOpenIcon, UserIcon, CogIcon } from './icons';
 
 interface SideTrayProps {
     user: User;
@@ -20,6 +20,10 @@ const SideTray: React.FC<SideTrayProps> = ({ user, onLogout, isOpen, setIsOpen }
 
     const studentTeacherNavItems = [
         { label: 'Your Decks', icon: CardsIcon, active: true },
+        { label: 'Profile', icon: UserIcon, active: false },
+        { label: 'Your Friends', icon: UserGroupIcon, active: false },
+        { label: 'Your Subjects', icon: BookOpenIcon, active: false },
+        { label: 'Settings', icon: CogIcon, active: false },
     ];
     
     const navItems = user.role === UserRole.ADMIN ? adminNavItems : studentTeacherNavItems;

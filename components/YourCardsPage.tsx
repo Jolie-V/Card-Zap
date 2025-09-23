@@ -1,29 +1,17 @@
 import React from 'react';
 import { CARD_COLORS } from '../constants';
-import { CardColor, GameMode } from '../types';
+import { Deck, GameMode } from '../types';
 import { PlusCircleIcon } from './icons';
-
-
-interface Deck {
-    title: string;
-    cardCount: number;
-    mode: GameMode;
-    color: CardColor;
-}
-
-const MOCK_DECKS: Deck[] = [
-    { title: "Chapter 5: Photosynthesis", cardCount: 25, mode: GameMode.CLASSIC, color: CardColor.Green },
-    { title: "World War II Dates", cardCount: 50, mode: GameMode.QUIZ, color: CardColor.Red },
-    { title: "Spanish Vocabulary", cardCount: 100, mode: GameMode.CLASSIC, color: CardColor.Blue },
-    { title: "Calculus Formulas", cardCount: 30, mode: GameMode.QUIZ, color: CardColor.Purple },
-];
 
 
 interface YourCardsPageProps {
     onCreateNew: () => void;
+    decks: Deck[];
+    onStudyDeck: (deck: Deck) => void;
+    error: string | null;
 }
 
-const YourCardsPage: React.FC<YourCardsPageProps> = ({ onCreateNew }) => {
+const YourCardsPage: React.FC<YourCardsPageProps> = ({ onCreateNew, decks, onStudyDeck, error }) => {
     return (
         <div className="w-full animate-[fade-in-up_0.5s_ease-out]">
              <style>{`
@@ -47,24 +35,34 @@ const YourCardsPage: React.FC<YourCardsPageProps> = ({ onCreateNew }) => {
                     Create New Deck
                 </button>
             </div>
+            
+            {error && <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg relative mb-6" role="alert">{error}</div>}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {MOCK_DECKS.map((deck, index) => (
-                    <div key={index} className="bg-white p-6 rounded-xl shadow-lg border border-primary-200 flex flex-col justify-between hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
-                        <div>
-                            <div className={`w-12 h-12 rounded-lg ${CARD_COLORS[deck.color].bg} mb-4`}></div>
-                            <h2 className="text-xl font-bold text-primary-700">{deck.title}</h2>
-                            <div className="flex items-center text-sm text-primary-500 mt-2 gap-4">
-                                <span>{deck.cardCount} Cards</span>
-                                <span className="capitalize">{deck.mode.toLowerCase()} Mode</span>
+            {decks.length === 0 && !error ? (
+                <div className="text-center p-12 bg-white rounded-2xl shadow-xl border border-primary-200">
+                    <h2 className="text-2xl font-bold text-primary-600">No decks yet!</h2>
+                    <p className="text-primary-500 mt-2">Click "Create New Deck" to get started.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {decks.map((deck) => (
+                        <div key={deck.id} className="bg-white p-6 rounded-xl shadow-lg border border-primary-200 flex flex-col justify-between hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                            <div>
+                                <div className={`w-12 h-12 rounded-lg ${CARD_COLORS[deck.color].bg} mb-4`}></div>
+                                <h2 className="text-xl font-bold text-primary-700">{deck.title}</h2>
+                                <div className="flex items-center text-sm text-primary-500 mt-2 gap-4">
+                                    <span className="capitalize">{deck.mode.toLowerCase()} Mode</span>
+                                </div>
                             </div>
+                            <button 
+                                onClick={() => onStudyDeck(deck)}
+                                className="mt-6 w-full font-semibold bg-primary-100 text-primary-600 rounded-md py-2 px-4 transition-colors hover:bg-primary-200">
+                                Study Deck
+                            </button>
                         </div>
-                        <button className="mt-6 w-full font-semibold bg-primary-100 text-primary-600 rounded-md py-2 px-4 transition-colors hover:bg-primary-200">
-                            Study Deck
-                        </button>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };

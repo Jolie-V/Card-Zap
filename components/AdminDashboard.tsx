@@ -1,10 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { UsersIcon, UserGroupIcon, AcademicCapIcon } from './icons';
-
-// Mock data
-const MOCK_STUDENT_COUNT = 152;
-const MOCK_TEACHER_COUNT = 23;
-const MOCK_TOTAL_USERS = MOCK_STUDENT_COUNT + MOCK_TEACHER_COUNT;
+import { supabase } from '../services/supabaseClient';
+import { UserRole } from '../types';
 
 interface StatCardProps {
     icon: React.ElementType;
@@ -29,22 +26,58 @@ const StatCard: React.FC<StatCardProps> = ({ icon: Icon, title, value, color }) 
 
 
 const AdminDashboard: React.FC = () => {
-    const stats = [
+    const [stats, setStats] = useState({ total: 0, students: 0, teachers: 0 });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            setLoading(true);
+            try {
+                const { count: totalCount } = await supabase
+                    .from('profiles')
+                    .select('*', { count: 'exact', head: true });
+                
+                const { count: studentCount } = await supabase
+                    .from('profiles')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('role', UserRole.STUDENT);
+
+                const { count: teacherCount } = await supabase
+                    .from('profiles')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('role', UserRole.TEACHER);
+                
+                setStats({
+                    total: totalCount ?? 0,
+                    students: studentCount ?? 0,
+                    teachers: teacherCount ?? 0
+                });
+            } catch (error) {
+                console.error("Error fetching admin stats:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
+
+    const statCards = [
         {
             title: "Total Users",
-            value: MOCK_TOTAL_USERS,
+            value: loading ? '...' : stats.total,
             icon: UsersIcon,
             color: 'bg-primary-500'
         },
         {
             title: "Students",
-            value: MOCK_STUDENT_COUNT,
+            value: loading ? '...' : stats.students,
             icon: UserGroupIcon,
             color: 'bg-blue-500'
         },
         {
             title: "Teachers",
-            value: MOCK_TEACHER_COUNT,
+            value: loading ? '...' : stats.teachers,
             icon: AcademicCapIcon,
             color: 'bg-green-500'
         }
@@ -68,7 +101,7 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {stats.map((stat, index) => (
+                {statCards.map((stat, index) => (
                     <StatCard 
                         key={index}
                         icon={stat.icon}
@@ -79,7 +112,6 @@ const AdminDashboard: React.FC = () => {
                 ))}
             </div>
 
-            {/* Placeholder for future admin content */}
             <div className="mt-8 bg-white p-8 rounded-2xl shadow-xl w-full border border-primary-200">
                 <h2 className="text-2xl font-bold text-primary-600 mb-4">Management</h2>
                 <div className="text-center p-12 bg-primary-100 rounded-lg">

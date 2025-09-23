@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { CardColor, ClassicFlashcard, GameMode, QuizFlashcard, StudyResult } from '../types';
 import ClassicCard from './ClassicCard';
 import QuizCard from './QuizCard';
+import { CloseIcon } from './icons';
 
 interface StudySessionProps {
   cards: (ClassicFlashcard | QuizFlashcard)[];
@@ -9,9 +10,10 @@ interface StudySessionProps {
   color: CardColor;
   title: string;
   onSessionComplete: (results: StudyResult[]) => void;
+  onExit: () => void;
 }
 
-const StudySession: React.FC<StudySessionProps> = ({ cards, mode, color, title, onSessionComplete }) => {
+const StudySession: React.FC<StudySessionProps> = ({ cards, mode, color, title, onSessionComplete, onExit }) => {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [results, setResults] = useState<StudyResult[]>([]);
 
@@ -33,7 +35,15 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, mode, color, title, 
   const progress = ((currentCardIndex) / cards.length) * 100;
 
   return (
-    <div className="w-full flex flex-col items-center">
+    <div className="w-full flex flex-col items-center relative">
+        <button
+            onClick={onExit}
+            className="absolute top-0 right-0 m-2 sm:m-0 text-primary-400 hover:text-primary-600 transition-colors z-10"
+            aria-label="Exit study session"
+        >
+            <CloseIcon className="w-10 h-10" />
+        </button>
+
         <div className="w-full max-w-2xl mb-4">
             <h1 className="text-3xl font-bold text-center mb-2">{title}</h1>
             <div className="flex justify-between items-center text-primary-500 mb-2">
