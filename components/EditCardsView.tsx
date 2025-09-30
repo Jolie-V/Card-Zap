@@ -5,11 +5,14 @@ import { TrashIcon, PlusCircleIcon } from './icons';
 interface EditCardsViewProps {
   initialCards: (ClassicFlashcard | QuizFlashcard)[];
   deckConfig: { title: string; color: CardColor; mode: GameMode };
-  onComplete: (editedCards: (ClassicFlashcard | QuizFlashcard)[]) => void;
+  onComplete: (editedCards: (ClassicFlashcard | QuizFlashcard)[], newTitle: string) => void;
+  onBack: () => void;
+  isNewDeck: boolean;
 }
 
-const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig, onComplete }) => {
+const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig, onComplete, onBack, isNewDeck }) => {
   const [cards, setCards] = useState<(ClassicFlashcard | QuizFlashcard)[]>(initialCards);
+  const [title, setTitle] = useState(deckConfig.title);
 
   const handleCardChange = (index: number, field: string, value: string | string[], optionIndex?: number) => {
     const newCards = [...cards];
@@ -50,14 +53,35 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
       setCards([...cards, newCard]);
     }
   };
+  
+  const handleSave = () => {
+    if (!title.trim()) {
+        alert("Deck title cannot be empty.");
+        return;
+    }
+    onComplete(cards, title);
+  }
 
   return (
     <div className="w-full max-w-4xl mx-auto">
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-primary-600">
-          Review & Edit Flashcards
+          {isNewDeck ? 'Review & Create Deck' : 'Edit Your Deck'}
         </h1>
-        <p className="text-primary-500">Fine-tune your deck before you start studying.</p>
+        <p className="text-primary-500">{isNewDeck ? 'Fine-tune your deck before you start studying.' : 'Update your deck title and cards.'}</p>
+      </div>
+
+      <div className="mb-6">
+        <label htmlFor="deck-title" className="block text-sm font-medium text-primary-600 mb-2">Deck Title</label>
+        <input
+            id="deck-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g., Chapter 5: Photosynthesis"
+            className="w-full bg-white border border-primary-300 rounded-md px-4 py-2 text-primary-700 focus:ring-2 focus:ring-primary-500 focus:outline-none shadow-sm"
+            required
+        />
       </div>
 
       <div className="space-y-4 mb-8">
@@ -125,7 +149,13 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+      <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mt-8">
+         <button
+            onClick={onBack}
+            className="w-full sm:w-auto text-lg font-bold bg-primary-200 text-primary-600 rounded-lg py-3 px-6 transition-colors hover:bg-primary-300/80"
+          >
+            Back
+        </button>
         <button
           onClick={handleAddCard}
           className="flex items-center justify-center gap-2 w-full sm:w-auto text-lg font-bold bg-primary-300 text-primary-600 rounded-lg py-3 px-6 transition-colors hover:bg-primary-400/80"
@@ -134,10 +164,10 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
           Add Card
         </button>
         <button
-          onClick={() => onComplete(cards)}
+          onClick={handleSave}
           className="w-full sm:w-auto text-lg font-bold bg-gradient-to-r from-primary-400 to-primary-600 text-white rounded-lg py-3 px-6 transition-all hover:from-primary-500 hover:to-primary-700"
         >
-          Start Study Session
+          {isNewDeck ? 'Start Study Session' : 'Save Changes'}
         </button>
       </div>
     </div>
