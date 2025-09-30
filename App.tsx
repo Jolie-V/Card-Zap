@@ -159,8 +159,10 @@ const App: React.FC = () => {
 
   const handleSaveDeckAndStudy = useCallback(async (editedCards: (ClassicFlashcard | QuizFlashcard)[], newTitle: string) => {
     if (!user || !deckConfig) return;
-
-    setAppState(AppState.GENERATING); // Show loading while saving
+    
+    const taskId = Date.now();
+    generationTask.current = taskId;
+    setAppState(AppState.SAVING_DECK);
 
     const { data: deckData, error: deckError } = await supabase
       .from('decks')
@@ -174,8 +176,10 @@ const App: React.FC = () => {
       .single();
 
     if (deckError) {
-      setError(`Error saving deck: ${deckError.message}`);
-      setAppState(AppState.EDITING); // Go back to editing on error
+      if (generationTask.current === taskId) {
+        setError(`Error saving deck: ${deckError.message}`);
+        setAppState(AppState.EDITING);
+      }
       return;
     }
 
@@ -191,17 +195,21 @@ const App: React.FC = () => {
       const { error: cardsError } = await supabase.from('flashcards').insert(flashcardsToInsert);
 
       if (cardsError) {
-        setError(`Error saving flashcards: ${cardsError.message}`);
-        await supabase.from('decks').delete().eq('id', deckData.id); // Clean up failed deck
-        setAppState(AppState.EDITING);
+        if (generationTask.current === taskId) {
+          setError(`Error saving flashcards: ${cardsError.message}`);
+          await supabase.from('decks').delete().eq('id', deckData.id); // Clean up failed deck
+          setAppState(AppState.EDITING);
+        }
         return;
       }
     }
     
-    await fetchDecks(user.id);
-    setFlashcards(editedCards);
-    setDeckConfig({ ...deckConfig, title: newTitle });
-    setAppState(AppState.STUDYING);
+    if (generationTask.current === taskId) {
+      await fetchDecks(user.id);
+      setFlashcards(editedCards);
+      setDeckConfig({ ...deckConfig, title: newTitle });
+      setAppState(AppState.STUDYING);
+    }
   }, [user, deckConfig, fetchDecks]);
   
   const handleStudyDeck = useCallback(async (deck: Deck) => {
@@ -272,8 +280,10 @@ const App: React.FC = () => {
 
   const handleUpdateDeck = useCallback(async (editedCards: (ClassicFlashcard | QuizFlashcard)[], newTitle: string) => {
     if (!user || !editingDeck || !deckConfig) return;
-
-    setAppState(AppState.GENERATING);
+    
+    const taskId = Date.now();
+    generationTask.current = taskId;
+    setAppState(AppState.SAVING_DECK);
     
     if (newTitle !== editingDeck.title) {
       const { error: deckUpdateError } = await supabase
@@ -282,16 +292,20 @@ const App: React.FC = () => {
         .eq('id', editingDeck.id);
 
       if (deckUpdateError) {
-        setError(`Error updating deck title: ${deckUpdateError.message}`);
-        setAppState(AppState.EDITING);
+        if (generationTask.current === taskId) {
+          setError(`Error updating deck title: ${deckUpdateError.message}`);
+          setAppState(AppState.EDITING);
+        }
         return;
       }
     }
 
     const { error: deleteError } = await supabase.from('flashcards').delete().eq('deck_id', editingDeck.id);
     if (deleteError) {
-      setError(`Error updating deck (card deletion step): ${deleteError.message}`);
-      setAppState(AppState.EDITING);
+       if (generationTask.current === taskId) {
+        setError(`Error updating deck (card deletion step): ${deleteError.message}`);
+        setAppState(AppState.EDITING);
+      }
       return;
     }
 
@@ -306,17 +320,21 @@ const App: React.FC = () => {
     if (flashcardsToInsert.length > 0) {
       const { error: insertError } = await supabase.from('flashcards').insert(flashcardsToInsert);
       if (insertError) {
-        setError(`Error updating deck (card insertion step): ${insertError.message}`);
-        setAppState(AppState.EDITING);
+        if (generationTask.current === taskId) {
+          setError(`Error updating deck (card insertion step): ${insertError.message}`);
+          setAppState(AppState.EDITING);
+        }
         return;
       }
     }
 
-    await fetchDecks(user.id);
-    setFlashcards([]);
-    setEditingDeck(null);
-    setDeckConfig(null);
-    setAppState(AppState.YOUR_CARDS);
+    if (generationTask.current === taskId) {
+      await fetchDecks(user.id);
+      setFlashcards([]);
+      setEditingDeck(null);
+      setDeckConfig(null);
+      setAppState(AppState.YOUR_CARDS);
+    }
   }, [user, editingDeck, deckConfig, fetchDecks]);
 
   const handleSessionComplete = useCallback((results: StudyResult[]) => {
@@ -339,6 +357,8 @@ const App: React.FC = () => {
         return <SetupForm onSubmit={handleFormSubmit} error={error} onBack={handleBackToDecks} />;
       case AppState.GENERATING_NEW_DECK:
         return <LoadingView onCancel={handleBackToDecks} />;
+      case AppState.SAVING_DECK:
+        return <LoadingView title="Saving Your Deck..." message="Please wait while we save your changes." onCancel={handleBackToDecks} />;
       case AppState.GENERATING:
         return <LoadingView title="Loading Deck..." message="Just a moment, we're getting your cards ready." />;
       case AppState.EDITING:
