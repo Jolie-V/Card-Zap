@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
-import { AppState, CardColor, ClassicFlashcard, GameMode, QuizFlashcard, StudyResult, User, UserRole, Deck, Subject, Lobby, LobbyMember } from './types';
+import { AppState, CardColor, ClassicFlashcard, GameMode, QuizFlashcard, StudyResult, User, UserRole, Deck, Subject } from './types';
 import { generateFlashcards } from './services/geminiService';
 import LoadingView from './components/LoadingView';
 import { supabase } from './services/supabaseClient';
@@ -21,8 +21,6 @@ const YourSubjectsPage = lazy(() => import('./components/YourSubjectsPage'));
 const SubjectRoomPage = lazy(() => import('./components/SubjectRoomPage'));
 const StudentSubjectDecksPage = lazy(() => import('./components/StudentSubjectDecksPage'));
 const YourFriendsPage = lazy(() => import('./components/YourFriendsPage'));
-const CoopLobbyPage = lazy(() => import('./components/CoopLobbyPage'));
-const CoopGamePage = lazy(() => import('./components/CoopGamePage'));
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -35,8 +33,6 @@ const App: React.FC = () => {
   const [editingDeck, setEditingDeck] = useState<Deck | null>(null);
   const [currentStudiedDeck, setCurrentStudiedDeck] = useState<Deck | null>(null);
   const [currentSubject, setCurrentSubject] = useState<Subject | null>(null);
-  const [currentLobby, setCurrentLobby] = useState<Lobby | null>(null);
-  const [lobbyMembers, setLobbyMembers] = useState<LobbyMember[]>([]);
   const generationTask = React.useRef<number>(0);
 
   useEffect(() => {
@@ -49,15 +45,18 @@ const App: React.FC = () => {
       }
 
       if (session) {
+        // Unblock the UI immediately with basic user info
         const basicUser: User = { 
           id: session.user.id, 
           email: session.user.email!, 
+          // Default role, will be updated by profile fetch
           role: UserRole.STUDENT,
           full_name: session.user.email!,
         };
         setUser(basicUser);
         setLoadingInitial(false);
 
+        // Fetch detailed profile in the background
         (async () => {
           try {
             const { data: profile, error: profileError } = await supabase
@@ -99,6 +98,7 @@ const App: React.FC = () => {
           }
         })();
       } else {
+        // No session, clear all state and show login
         setUser(null);
         setAppState(AppState.LOGIN);
         generationTask.current = 0;
@@ -108,8 +108,6 @@ const App: React.FC = () => {
         setEditingDeck(null);
         setCurrentStudiedDeck(null);
         setCurrentSubject(null);
-        setCurrentLobby(null);
-        setLobbyMembers([]);
         setError(null);
         setLoadingInitial(false);
       }
@@ -120,56 +118,6 @@ const App: React.FC = () => {
       subscription.unsubscribe();
     };
   }, []);
-
-  // Realtime subscription for lobby members
-  useEffect(() => {
-    if (!currentLobby) return;
-
-    const channel = supabase
-      .channel(`lobby_${currentLobby.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'lobby_members',
-          filter: `lobby_id=eq.${currentLobby.id}`,
-        },
-        async (payload) => {
-          console.log('Lobby member change received!', payload);
-          // Refetch all members to ensure consistency
-          const { data, error } = await supabase
-            .from('lobby_members')
-            .select('*, profile:profiles(full_name)')
-            .eq('lobby_id', currentLobby.id);
-          
-          if (error) {
-            console.error('Error refetching lobby members:', error);
-          } else {
-            setLobbyMembers(data as any[] || []);
-          }
-        }
-      )
-      .subscribe();
-      
-      // Initial fetch of members
-      (async () => {
-         const { data, error } = await supabase
-            .from('lobby_members')
-            .select('*, profile:profiles(full_name)')
-            .eq('lobby_id', currentLobby.id);
-        if (error) {
-            setError(`Failed to fetch lobby members: ${getErrorMessage(error)}`);
-        } else {
-            setLobbyMembers(data as any[] || []);
-        }
-      })();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentLobby]);
-
 
   const handleSignIn = useCallback(async (credentials: { email: string; password: string }) => {
     const { error } = await supabase.auth.signInWithPassword(credentials);
@@ -213,6 +161,7 @@ const App: React.FC = () => {
     } catch (e) {
       console.error("Error during sign out:", getErrorMessage(e));
       setError(`Failed to log out. Error: ${getErrorMessage(e)}`);
+      // Fallback to ensure user is logged out on the client side
       setUser(null);
       setAppState(AppState.LOGIN);
     }
@@ -233,8 +182,6 @@ const App: React.FC = () => {
       setEditingDeck(null);
       setCurrentStudiedDeck(null);
       setCurrentSubject(null);
-      setCurrentLobby(null);
-      setLobbyMembers([]);
     }
     setAppState(page);
   }, []);
@@ -477,25 +424,6 @@ const App: React.FC = () => {
     setAppState(AppState.RESULTS);
   }, [user, currentStudiedDeck]);
 
-  const handleInviteToLobby = useCallback(async (inviteeId: string) => {
-    setError(null);
-    try {
-        const { data, error: rpcError } = await supabase.rpc('create_lobby_and_invite', {
-            invitee_id: inviteeId
-        });
-        if (rpcError) throw rpcError;
-        
-        if (data && data.length > 0) {
-            setCurrentLobby(data[0]);
-            setAppState(AppState.COOP_LOBBY);
-        } else {
-            throw new Error("Failed to create lobby: No data returned.");
-        }
-    } catch (err) {
-        setError(`Failed to create lobby: ${getErrorMessage(err)}`);
-    }
-  }, []);
-
   const handleRestart = useCallback(() => {
     setStudyResults([]);
     setAppState(AppState.STUDYING);
@@ -558,24 +486,6 @@ const App: React.FC = () => {
                   onBackToDecks={handleBackToDecks}
                   title={deckConfig.title}
                />;
-      
-      case AppState.COOP_LOBBY:
-        if (!currentLobby) return <LoadingView title="Redirecting..." message="Lobby not found." />;
-        return <CoopLobbyPage 
-                  user={user} 
-                  lobby={currentLobby} 
-                  members={lobbyMembers} 
-                  onLeaveLobby={() => handleNavigate(AppState.YOUR_FRIENDS)} 
-                  onStartGame={() => setAppState(AppState.COOP_GAME)}
-               />;
-
-      case AppState.COOP_GAME:
-        if (!currentLobby) return <LoadingView title="Redirecting..." message="Lobby not found." />;
-        return <CoopGamePage 
-                 lobby={currentLobby} 
-                 members={lobbyMembers} 
-                 onLeaveGame={() => handleNavigate(AppState.YOUR_FRIENDS)}
-               />;
 
       case AppState.ADMIN_DASHBOARD:
       case AppState.YOUR_CARDS:
@@ -618,7 +528,7 @@ const App: React.FC = () => {
         } else if (appState === AppState.SUBJECT_ROOM && currentSubject) {
           pageContent = <SubjectRoomPage user={user} subject={currentSubject} onBack={() => handleNavigate(AppState.SUBJECTS)} />;
         } else if (appState === AppState.YOUR_FRIENDS) {
-          pageContent = <YourFriendsPage user={user} onInviteToLobby={handleInviteToLobby} />;
+          pageContent = <YourFriendsPage user={user} />;
         } else if ((appState === AppState.SUBJECT_ROOM || appState === AppState.STUDENT_SUBJECT_DECKS) && !currentSubject) {
           handleNavigate(user.role === UserRole.STUDENT ? AppState.STUDENT_SUBJECTS : AppState.SUBJECTS);
           return <LoadingView title="Redirecting..." message="No subject selected."/>;
@@ -631,6 +541,7 @@ const App: React.FC = () => {
         );
 
       default:
+        // Default to the user's main dashboard view if the state is unexpected but they are logged in.
         return (
              <DashboardLayout user={user} onLogout={handleLogout} activePage={AppState.YOUR_CARDS} onNavigate={handleNavigate}>
                 <YourCardsPage 
@@ -645,7 +556,7 @@ const App: React.FC = () => {
     }
   };
 
-  const isDashboard = user && [AppState.ADMIN_DASHBOARD, AppState.YOUR_CARDS, AppState.PROFILE, AppState.SUBJECTS, AppState.STUDENT_SUBJECTS, AppState.STUDENT_SUBJECT_DECKS, AppState.SUBJECT_ROOM, AppState.YOUR_FRIENDS, AppState.COOP_LOBBY, AppState.COOP_GAME].includes(appState);
+  const isDashboard = user && [AppState.ADMIN_DASHBOARD, AppState.YOUR_CARDS, AppState.PROFILE, AppState.SUBJECTS, AppState.STUDENT_SUBJECTS, AppState.STUDENT_SUBJECT_DECKS, AppState.SUBJECT_ROOM, AppState.YOUR_FRIENDS].includes(appState);
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${isDashboard ? 'bg-primary-100' : 'bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center p-4'}`}>

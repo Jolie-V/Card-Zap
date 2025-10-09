@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Friend, FriendRequest, StudentProfile } from '../types';
 import { ProfileAvatar, SearchIcon } from './icons';
@@ -7,7 +6,6 @@ import { getErrorMessage } from '../utils';
 
 interface YourFriendsPageProps {
     user: User;
-    onInviteToLobby: (inviteeId: string) => void;
 }
 
 type Tab = 'friends' | 'search' | 'requests';
@@ -26,7 +24,7 @@ const useDebounce = (value: string, delay: number) => {
     return debouncedValue;
 };
 
-const YourFriendsPage: React.FC<YourFriendsPageProps> = ({ user, onInviteToLobby }) => {
+const YourFriendsPage: React.FC<YourFriendsPageProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState<Tab>('friends');
     
     const [friends, setFriends] = useState<Friend[]>([]);
@@ -79,8 +77,7 @@ const YourFriendsPage: React.FC<YourFriendsPageProps> = ({ user, onInviteToLobby
                 search_term: term
             });
             if (rpcError) throw rpcError;
-            // Filter out any potential null or undefined entries from the result
-            setSearchResults((data || []).filter(Boolean));
+            setSearchResults(data || []);
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
@@ -144,7 +141,7 @@ const YourFriendsPage: React.FC<YourFriendsPageProps> = ({ user, onInviteToLobby
     const renderTabContent = () => {
         switch (activeTab) {
             case 'friends':
-                return <FriendsList members={friends} onRemove={handleDeclineOrRemove} onInvite={onInviteToLobby} isLoading={loading.friends} />;
+                return <FriendsList members={friends} onRemove={handleDeclineOrRemove} isLoading={loading.friends} />;
             case 'search':
                 return <StudentSearchList 
                             members={searchResults} 
@@ -222,7 +219,7 @@ const SearchBar: React.FC<{searchTerm: string, setSearchTerm: (term: string) => 
     </div>
 );
 
-const FriendsList: React.FC<{members: Friend[], onRemove: (id: number) => void, onInvite: (id: string) => void, isLoading: boolean}> = ({ members, onRemove, onInvite, isLoading }) => {
+const FriendsList: React.FC<{members: Friend[], onRemove: (id: number) => void, isLoading: boolean}> = ({ members, onRemove, isLoading }) => {
     if (isLoading) return <p className="text-center text-primary-500 py-8">Loading friends...</p>;
     return (
         <div>
@@ -235,14 +232,11 @@ const FriendsList: React.FC<{members: Friend[], onRemove: (id: number) => void, 
                             <div className="flex items-center gap-4">
                                 <ProfileAvatar className="w-12 h-12" />
                                 <div>
-                                    <p className="font-semibold text-primary-700">{member.full_name || 'Unnamed Student'}</p>
+                                    <p className="font-semibold text-primary-700">{member.full_name}</p>
                                     <p className="text-sm text-primary-500">{member.course || 'No course specified'}</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => onInvite(member.user_id)} className="font-semibold text-sm bg-primary-200 text-primary-700 rounded-md py-1.5 px-4 hover:bg-primary-300">Invite</button>
-                                <button onClick={() => onRemove(member.friendship_id)} className="font-semibold text-sm bg-red-100 text-red-700 rounded-md py-1.5 px-4 hover:bg-red-200">Remove</button>
-                            </div>
+                            <button onClick={() => onRemove(member.friendship_id)} className="font-semibold text-sm bg-red-100 text-red-700 rounded-md py-1.5 px-4 hover:bg-red-200">Remove</button>
                         </li>
                     ))}
                 </ul>
@@ -265,7 +259,7 @@ const StudentSearchList: React.FC<{members: StudentProfile[], onAdd: (id: string
                         <div className="flex items-center gap-4">
                             <ProfileAvatar className="w-12 h-12" />
                             <div>
-                                <p className="font-semibold text-primary-700">{member.full_name || 'Unnamed Student'}</p>
+                                <p className="font-semibold text-primary-700">{member.full_name}</p>
                                 <p className="text-sm text-primary-500">{member.course || 'No course specified'}</p>
                             </div>
                         </div>
@@ -290,7 +284,7 @@ const RequestsList: React.FC<{members: FriendRequest[], onAccept: (id: number) =
                         <div className="flex items-center gap-4">
                             <ProfileAvatar className="w-12 h-12" />
                             <div>
-                                <p className="font-semibold text-primary-700">{member.full_name || 'Unnamed Student'}</p>
+                                <p className="font-semibold text-primary-700">{member.full_name}</p>
                                 <p className="text-sm text-primary-500">{member.course || 'No course specified'}</p>
                             </div>
                         </div>

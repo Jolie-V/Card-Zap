@@ -15,8 +15,6 @@ export enum AppState {
   STUDENT_SUBJECT_DECKS = 'STUDENT_SUBJECT_DECKS', // Student's view of decks in a subject
   SUBJECT_ROOM = 'SUBJECT_ROOM',
   YOUR_FRIENDS = 'YOUR_FRIENDS',
-  COOP_LOBBY = 'COOP_LOBBY',
-  COOP_GAME = 'COOP_GAME',
 }
 
 export enum GameMode {
@@ -49,18 +47,6 @@ export enum EnrollmentStatus {
 export enum FriendshipStatus {
   PENDING = 'pending',
   ACCEPTED = 'accepted',
-}
-
-export enum LobbyStatus {
-    WAITING = 'waiting',
-    IN_PROGRESS = 'in_progress',
-    FINISHED = 'finished',
-}
-
-export enum LobbyMemberStatus {
-    INVITED = 'invited',
-    JOINED = 'joined',
-    LEFT = 'left',
 }
 
 
@@ -108,40 +94,21 @@ export interface SubjectEnrollment {
 export interface Friend {
     friendship_id: number;
     user_id: string; // The friend's user ID
-    full_name: string | null;
+    full_name: string;
     course: string | null;
 }
 
 export interface FriendRequest {
     friendship_id: number;
     requester_id: string;
-    full_name: string | null;
+    full_name: string;
     course: string | null;
 }
 
 export interface StudentProfile {
     id: string;
-    full_name: string | null;
+    full_name: string;
     course: string | null;
-}
-
-export interface Lobby {
-    id: string;
-    host_id: string;
-    status: LobbyStatus;
-    created_at: string;
-    deck_id: number | null;
-}
-
-export interface LobbyMember {
-    lobby_id: string;
-    user_id: string;
-    status: LobbyMemberStatus;
-    score: number;
-    joined_at: string | null;
-    profile: {
-        full_name: string | null;
-    };
 }
 
 
