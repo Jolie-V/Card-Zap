@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { GameMode, CardColor } from '../types';
 import { parseFile } from '../services/fileParser';
 import { CARD_COLORS } from '../constants';
+import { getErrorMessage } from '../utils';
 
 interface SetupFormProps {
   onSubmit: (title: string, mode: GameMode, inputText: string, cardCount: number, color: CardColor) => void;
@@ -17,19 +18,26 @@ const SetupForm: React.FC<SetupFormProps> = ({ onSubmit, error, onBack }) => {
   const [cardCount, setCardCount] = useState(10);
   const [color, setColor] = useState<CardColor>(CardColor.Blue);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
       setIsProcessingFile(true);
+      setFormError(null);
+      setText(''); // Clear previous text
       try {
         const fileContent = await parseFile(selectedFile);
-        setText(fileContent);
+        if (!fileContent.trim()) {
+            setFormError("The selected file is empty or could not be read. Please provide a file with text content.");
+        } else {
+            setText(fileContent);
+        }
       } catch (err) {
-        console.error(err);
-        const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-        alert(`Failed to parse file: ${errorMessage}`);
+        const errorMessage = getErrorMessage(err);
+        console.error("File parsing error:", errorMessage);
+        setFormError(`Failed to parse file: ${errorMessage}`);
       } finally {
         setIsProcessingFile(false);
       }
@@ -38,12 +46,13 @@ const SetupForm: React.FC<SetupFormProps> = ({ onSubmit, error, onBack }) => {
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) {
-      alert('Please provide some text or upload a file.');
+    setFormError(null);
+    if (!title.trim()){
+      setFormError('Please enter a title for your flashcard deck.');
       return;
     }
-    if (!title.trim()){
-      alert('Please enter a title for your flashcard deck.');
+    if (!text.trim()) {
+      setFormError('Please provide study material by pasting text or uploading a valid file.');
       return;
     }
     onSubmit(title, mode, text, cardCount, color);
@@ -63,6 +72,7 @@ const SetupForm: React.FC<SetupFormProps> = ({ onSubmit, error, onBack }) => {
       <p className="text-center text-primary-500 mb-8">Create your AI-powered study set in seconds.</p>
 
       {error && <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg relative mb-6" role="alert">{error}</div>}
+      {formError && <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg relative mb-6" role="alert">{formError}</div>}
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
@@ -142,7 +152,7 @@ const SetupForm: React.FC<SetupFormProps> = ({ onSubmit, error, onBack }) => {
             <button type="button" onClick={onBack} className="w-full sm:w-auto text-lg font-bold bg-primary-200 text-primary-600 rounded-lg py-3 px-6 transition-all hover:bg-primary-300/80">
                 Back
             </button>
-            <button type="submit" disabled={isProcessingFile || !text} className="w-full sm:flex-1 text-lg font-bold bg-gradient-to-r from-primary-400 to-primary-600 text-white rounded-lg py-3 px-6 transition-all hover:from-primary-500 hover:to-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="submit" disabled={isProcessingFile || !text.trim()} className="w-full sm:flex-1 text-lg font-bold bg-gradient-to-r from-primary-400 to-primary-600 text-white rounded-lg py-3 px-6 transition-all hover:from-primary-500 hover:to-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
                 Generate Flashcards
             </button>
         </div>

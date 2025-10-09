@@ -17,6 +17,27 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, mode, color, title, 
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [results, setResults] = useState<StudyResult[]>([]);
 
+  if (!cards || cards.length === 0) {
+    return (
+      <div className="w-full max-w-2xl text-center p-8 bg-white rounded-2xl shadow-xl border border-primary-200 animate-[fade-in_0.3s_ease-out]">
+         <style>{`
+            @keyframes fade-in {
+                from { opacity: 0; transform: scale(0.95); }
+                to { opacity: 1; transform: scale(1); }
+            }
+        `}</style>
+        <h2 className="text-2xl font-bold text-primary-700 mb-4">Empty Deck</h2>
+        <p className="text-primary-500 mb-6">There are no cards in this deck to study.</p>
+        <button
+          onClick={onExit}
+          className="font-semibold bg-primary-500 text-white rounded-md py-2 px-6 transition-colors hover:bg-primary-600"
+        >
+          Back to Decks
+        </button>
+      </div>
+    );
+  }
+
   const handleAnswer = useCallback((isCorrect: boolean) => {
     const newResult: StudyResult = { card: cards[currentCardIndex], isCorrect };
     const updatedResults = [...results, newResult];

@@ -54,34 +54,49 @@ export async function generateFlashcards(
   mode: GameMode
 ): Promise<(ClassicFlashcard | QuizFlashcard)[]> {
   const model = 'gemini-2.5-flash';
+
+  const systemInstruction = `You are an expert study assistant. Your sole purpose is to analyze text and generate high-quality flashcards in a structured JSON format. You must strictly adhere to the provided JSON schema. Do not add any commentary, explanations, or introductory text. Your output must be only the JSON array, starting with '[' and ending with ']'.`;
   
-  const prompt = `Your task is to act as a study assistant. First, analyze and summarize the key information from the following text. Then, based on your summary and the most critical points in the text, generate exactly ${cardCount} flashcards. The flashcards should be designed to help someone learn and remember the material effectively.
-  
-  Mode: ${mode}
-  
-  Text:
-  ---
-  ${inputText}
-  ---
-  
-  Ensure the flashcards cover a range of topics from the text, focusing on core concepts, important definitions, and significant data points. Provide the output in the specified JSON format.`;
+  const prompt = `From the following text, generate up to ${cardCount} flashcards in ${mode} mode.
+
+Source Text:
+---
+${inputText}
+---`;
 
   const schema = mode === GameMode.CLASSIC ? classicSchema : quizSchema;
+  let rawResponseText = "";
 
   try {
-    const response = await ai.models.generateContent({
+    const stream = await ai.models.generateContentStream({
       model,
       contents: prompt,
       config: {
+        systemInstruction,
         responseMimeType: "application/json",
         responseSchema: schema,
       },
     });
-
-    const jsonText = response.text.trim();
-    if (!jsonText) {
-        throw new Error("API returned an empty response.");
+    
+    for await (const chunk of stream) {
+        rawResponseText += chunk.text;
     }
+
+    if (!rawResponseText) {
+        throw new Error("API returned an empty response stream.");
+    }
+    
+    // Robust JSON parsing: find the start of the array and the end of the array
+    let jsonText = rawResponseText.trim();
+    const startIndex = jsonText.indexOf('[');
+    const endIndex = jsonText.lastIndexOf(']');
+
+    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+        console.error("Failed to find a valid JSON array in the AI response. Full response:", jsonText);
+        throw new Error("AI response did not contain a valid JSON array structure.");
+    }
+
+    jsonText = jsonText.substring(startIndex, endIndex + 1);
 
     const parsedData = JSON.parse(jsonText);
     
@@ -89,15 +104,24 @@ export async function generateFlashcards(
       throw new Error("API did not return an array of flashcards.");
     }
     
-    // Basic validation
+    // Ensure we don't return more cards than requested
+    const validatedAndSlicedData = parsedData.slice(0, cardCount);
+
+    // Basic validation on the sliced data
     if (mode === GameMode.CLASSIC) {
-        return parsedData.filter(c => c.question && c.answer) as ClassicFlashcard[];
+        return validatedAndSlicedData.filter(c => c.question && c.answer) as ClassicFlashcard[];
     } else {
-        return parsedData.filter(c => c.question && Array.isArray(c.options) && c.options.length > 0 && c.correctAnswer) as QuizFlashcard[];
+        return validatedAndSlicedData.filter(c => c.question && Array.isArray(c.options) && c.options.length > 0 && c.correctAnswer) as QuizFlashcard[];
     }
 
   } catch (error) {
     console.error("Error generating flashcards with Gemini:", error);
-    throw new Error("Failed to parse flashcards from AI response.");
+    // Log the raw response for debugging if parsing fails
+    if (error instanceof SyntaxError) {
+        console.error("Raw response that failed to parse:", rawResponseText);
+        throw new Error("Failed to parse the AI's response as valid JSON. The format was incorrect.");
+    }
+    // Re-throw other errors
+    throw error;
   }
 }

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { UsersIcon, UserGroupIcon, AcademicCapIcon } from './icons';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { UsersIcon, UserGroupIcon, AcademicCapIcon, BookOpenIcon, RefreshIcon } from './icons';
 import { supabase } from '../services/supabaseClient';
-import { UserRole } from '../types';
+import { getErrorMessage } from '../utils';
 
 interface StatCardProps {
     icon: React.ElementType;
@@ -24,43 +25,53 @@ const StatCard: React.FC<StatCardProps> = ({ icon: Icon, title, value, color }) 
     );
 };
 
-
 const AdminDashboard: React.FC = () => {
-    const [stats, setStats] = useState({ total: 0, students: 0, teachers: 0 });
+    const [stats, setStats] = useState({ total: 0, students: 0, teachers: 0, subjects: 0 });
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchStats = useCallback(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        
+        setLoading(true);
+        setError(null);
+        try {
+            const { data, error: rpcError } = await supabase.rpc('get_admin_stats').abortSignal(controller.signal);
+            if (rpcError) throw rpcError;
+            
+            if (data && data.length > 0) {
+                 const result = data[0];
+                 setStats({
+                    total: result.total_users,
+                    students: result.student_users,
+                    teachers: result.teacher_users,
+                    subjects: result.total_subjects || 0,
+                 });
+            } else {
+                setStats({ total: 0, students: 0, teachers: 0, subjects: 0 });
+            }
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                console.error('Admin stats fetch timed out.');
+                setError('Failed to load statistics: The request timed out. Please check your connection.');
+            } else {
+                console.error("Error fetching admin stats via RPC:", getErrorMessage(err));
+                setError(`Failed to fetch statistics. (Details: ${getErrorMessage(err)})`);
+            }
+        } finally {
+            clearTimeout(timeoutId);
+            setLoading(false);
+        }
+        return () => {
+            clearTimeout(timeoutId);
+            controller.abort();
+        };
+    }, []);
 
     useEffect(() => {
-        const fetchStats = async () => {
-            setLoading(true);
-            try {
-                const { count: totalCount } = await supabase
-                    .from('profiles')
-                    .select('*', { count: 'exact', head: true });
-                
-                const { count: studentCount } = await supabase
-                    .from('profiles')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('role', UserRole.STUDENT);
-
-                const { count: teacherCount } = await supabase
-                    .from('profiles')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('role', UserRole.TEACHER);
-                
-                setStats({
-                    total: totalCount ?? 0,
-                    students: studentCount ?? 0,
-                    teachers: teacherCount ?? 0
-                });
-            } catch (error) {
-                console.error("Error fetching admin stats:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchStats();
-    }, []);
+    }, [fetchStats]);
 
     const statCards = [
         {
@@ -80,6 +91,12 @@ const AdminDashboard: React.FC = () => {
             value: loading ? '...' : stats.teachers,
             icon: AcademicCapIcon,
             color: 'bg-green-500'
+        },
+        {
+            title: "Total Subjects",
+            value: loading ? '...' : stats.subjects,
+            icon: BookOpenIcon,
+            color: 'bg-purple-500'
         }
     ];
 
@@ -91,16 +108,33 @@ const AdminDashboard: React.FC = () => {
                     to { opacity: 1; transform: translateY(0); }
                 }
             `}</style>
-            <div className="mb-8">
-                <h1 className="text-4xl font-bold text-primary-700">
-                    Admin Dashboard
-                </h1>
-                <p className="text-primary-500 mt-1">
-                    An overview of the application's activity and users.
-                </p>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+                <div>
+                    <h1 className="text-4xl font-bold text-primary-700">
+                        Admin Dashboard
+                    </h1>
+                    <p className="text-primary-500 mt-1">
+                        An overview of the application's activity and users.
+                    </p>
+                </div>
+                <button 
+                    onClick={fetchStats}
+                    disabled={loading}
+                    className="flex mt-4 sm:mt-0 items-center justify-center gap-2 font-semibold bg-primary-200 text-primary-600 rounded-lg py-2 px-4 transition-all hover:bg-primary-300/80 disabled:opacity-50"
+                >
+                    <RefreshIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                    Refresh
+                </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {error && (
+                <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg relative mb-6" role="alert">
+                    <strong className="font-bold">Dashboard Error: </strong>
+                    <span className="block sm:inline whitespace-pre-wrap">{error}</span>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {statCards.map((stat, index) => (
                     <StatCard 
                         key={index}

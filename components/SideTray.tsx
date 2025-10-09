@@ -1,33 +1,56 @@
+
+
+
 import React from 'react';
-import { User, UserRole } from '../types';
-import { CardZapLogo, DashboardIcon, CardsIcon, LogoutIcon, CloseIcon, UserGroupIcon, AcademicCapIcon, BookOpenIcon, UserIcon, CogIcon } from './icons';
+import { User, UserRole, AppState } from '../types';
+import { CardZapLogo, DashboardIcon, CardsIcon, LogoutIcon, CloseIcon, UserGroupIcon, AcademicCapIcon, BookOpenIcon, UserIcon } from './icons';
 
 interface SideTrayProps {
     user: User;
     onLogout: () => void;
     isOpen: boolean;
     setIsOpen: (isOpen: boolean) => void;
+    activePage: AppState;
+    onNavigate: (page: AppState) => void;
 }
 
-const SideTray: React.FC<SideTrayProps> = ({ user, onLogout, isOpen, setIsOpen }) => {
+const SideTray: React.FC<SideTrayProps> = ({ user, onLogout, isOpen, setIsOpen, activePage, onNavigate }) => {
     
     const adminNavItems = [
-        { label: 'Dashboard', icon: DashboardIcon, active: true },
-        { label: 'Students', icon: UserGroupIcon, active: false },
-        { label: 'Teachers', icon: AcademicCapIcon, active: false },
-        { label: 'Subjects', icon: BookOpenIcon, active: false },
+        { label: 'Dashboard', icon: DashboardIcon, page: AppState.ADMIN_DASHBOARD },
+        { label: 'Students', icon: UserGroupIcon, page: null },
+        { label: 'Teachers', icon: AcademicCapIcon, page: null },
+        { label: 'Subjects', icon: BookOpenIcon, page: null },
     ];
 
-    const studentTeacherNavItems = [
-        { label: 'Your Decks', icon: CardsIcon, active: true },
-        { label: 'Profile', icon: UserIcon, active: false },
-        { label: 'Your Friends', icon: UserGroupIcon, active: false },
-        { label: 'Your Subjects', icon: BookOpenIcon, active: false },
-        { label: 'Settings', icon: CogIcon, active: false },
+    const studentNavItems = [
+        { label: 'Your Decks', icon: CardsIcon, page: AppState.YOUR_CARDS },
+        { label: 'Your Subjects', icon: BookOpenIcon, page: AppState.STUDENT_SUBJECTS },
+        { label: 'Profile', icon: UserIcon, page: AppState.PROFILE },
+        { label: 'Your Friends', icon: UserGroupIcon, page: AppState.YOUR_FRIENDS },
+    ];
+
+    const teacherNavItems = [
+        { label: 'Your Decks', icon: CardsIcon, page: AppState.YOUR_CARDS },
+        { label: 'Your Subjects', icon: BookOpenIcon, page: AppState.SUBJECTS },
+        { label: 'Profile', icon: UserIcon, page: AppState.PROFILE },
     ];
     
-    const navItems = user.role === UserRole.ADMIN ? adminNavItems : studentTeacherNavItems;
-
+    let navItems;
+    if (user.role === UserRole.ADMIN) {
+        navItems = adminNavItems;
+    } else if (user.role === UserRole.TEACHER) {
+        navItems = teacherNavItems;
+    } else { // Student
+        navItems = studentNavItems;
+    }
+    
+    const handleNavigate = (page: AppState | null) => {
+        if (page) {
+            onNavigate(page);
+            setIsOpen(false);
+        }
+    };
 
     return (
         <>
@@ -48,16 +71,36 @@ const SideTray: React.FC<SideTrayProps> = ({ user, onLogout, isOpen, setIsOpen }
                     </button>
                 </div>
                 <nav className="flex-1 px-4 py-6 space-y-2">
-                    {navItems.map(item => (
-                        <a key={item.label} href="#" className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold transition-colors ${item.active ? 'bg-primary-500 text-white' : 'text-primary-600 hover:bg-primary-100'}`}>
+                    {navItems.map(item => {
+                        const commonClasses = "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-left transition-colors";
+                        if (item.page === null) {
+                            return (
+                                <div key={item.label} className={`${commonClasses} text-primary-400 cursor-not-allowed opacity-60`}>
+                                  <item.icon className="h-6 w-6" />
+                                  <span>{item.label}</span>
+                                  <span className="text-xs font-normal bg-primary-200 text-primary-500 px-2 py-0.5 rounded-full ml-auto">Soon</span>
+                                </div>
+                            );
+                        }
+                        
+                        const isActive = activePage === item.page;
+                        
+                        return (
+                          <button 
+                            key={item.label}
+                            onClick={() => handleNavigate(item.page)}
+                            className={`${commonClasses} ${isActive ? 'bg-primary-500 text-white' : 'text-primary-600 hover:bg-primary-100'}`}
+                           >
                             <item.icon className="h-6 w-6" />
                             <span>{item.label}</span>
-                        </a>
-                    ))}
+                          </button>
+                        )
+                    })}
                 </nav>
                 <div className="p-4 border-t border-primary-200">
                      <div className="mb-4 p-3 rounded-lg bg-primary-100">
-                        <p className="text-sm font-semibold text-primary-700 truncate">{user.email}</p>
+                        <p className="text-sm font-semibold text-primary-700 truncate">{user.full_name}</p>
+                        <p className="text-xs text-primary-500 truncate">{user.email}</p>
                         <p className="text-xs text-primary-500">{user.role}</p>
                     </div>
                     <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-primary-600 hover:bg-primary-100 transition-colors">

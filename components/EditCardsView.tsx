@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { CardColor, ClassicFlashcard, GameMode, QuizFlashcard } from '../types';
-import { TrashIcon, PlusCircleIcon } from './icons';
+import { CardColor, ClassicFlashcard, GameMode, QuizFlashcard, User } from '../types';
+import { TrashIcon, PlusCircleIcon, CloseIcon } from './icons';
 
 interface EditCardsViewProps {
   initialCards: (ClassicFlashcard | QuizFlashcard)[];
@@ -8,9 +8,23 @@ interface EditCardsViewProps {
   onComplete: (editedCards: (ClassicFlashcard | QuizFlashcard)[], newTitle: string) => void;
   onBack: () => void;
   isNewDeck: boolean;
+  user: User | null;
+  onStartGuestSession: (editedCards: (ClassicFlashcard | QuizFlashcard)[], newTitle: string) => void;
+  error: string | null;
+  clearError: () => void;
 }
 
-const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig, onComplete, onBack, isNewDeck }) => {
+const EditCardsView: React.FC<EditCardsViewProps> = ({ 
+    initialCards, 
+    deckConfig, 
+    onComplete, 
+    onBack, 
+    isNewDeck, 
+    user, 
+    onStartGuestSession,
+    error,
+    clearError
+}) => {
   const [cards, setCards] = useState<(ClassicFlashcard | QuizFlashcard)[]>(initialCards);
   const [title, setTitle] = useState(deckConfig.title);
 
@@ -59,8 +73,22 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
         alert("Deck title cannot be empty.");
         return;
     }
-    onComplete(cards, title);
+    if (isNewDeck && !user) {
+        onStartGuestSession(cards, title);
+    } else {
+        onComplete(cards, title);
+    }
   }
+
+  const getButtonText = () => {
+    if (isNewDeck) {
+      return user ? 'Save & Study' : 'Start Study Session';
+    }
+    return 'Save Changes';
+  };
+
+  const isSchemaError = error?.startsWith('SCHEMA_CACHE_ERROR:');
+  const errorMessage = error?.replace('SCHEMA_CACHE_ERROR:', '');
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -70,6 +98,33 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
         </h1>
         <p className="text-primary-500">{isNewDeck ? 'Fine-tune your deck before you start studying.' : 'Update your deck title and cards.'}</p>
       </div>
+
+       {error && (
+        isSchemaError ? (
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-6 rounded-r-lg" role="alert">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <p className="font-bold">Database Out of Sync</p>
+                        <p className="text-sm mt-1">{errorMessage}</p>
+                        <button 
+                            onClick={() => window.location.reload()}
+                            className="mt-3 text-sm font-semibold bg-yellow-200 text-yellow-800 rounded px-3 py-1.5 hover:bg-yellow-300"
+                        >
+                            Refresh Page to Sync
+                        </button>
+                    </div>
+                    <button onClick={clearError} className="p-1 -mt-2 -mr-2"><CloseIcon className="w-5 h-5"/></button>
+                </div>
+            </div>
+        ) : (
+            <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg relative mb-6" role="alert">
+                {error}
+                <button onClick={clearError} className="absolute top-0 bottom-0 right-0 px-4 py-3" aria-label="Close error">
+                    <CloseIcon className="w-5 h-5"/>
+                </button>
+            </div>
+        )
+      )}
 
       <div className="mb-6">
         <label htmlFor="deck-title" className="block text-sm font-medium text-primary-600 mb-2">Deck Title</label>
@@ -167,7 +222,7 @@ const EditCardsView: React.FC<EditCardsViewProps> = ({ initialCards, deckConfig,
           onClick={handleSave}
           className="w-full sm:w-auto text-lg font-bold bg-gradient-to-r from-primary-400 to-primary-600 text-white rounded-lg py-3 px-6 transition-all hover:from-primary-500 hover:to-primary-700"
         >
-          {isNewDeck ? 'Start Study Session' : 'Save Changes'}
+          {getButtonText()}
         </button>
       </div>
     </div>

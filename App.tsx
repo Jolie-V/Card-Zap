@@ -1,132 +1,260 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { AppState, CardColor, ClassicFlashcard, GameMode, QuizFlashcard, StudyResult, User, UserRole, Deck } from './types';
-import SetupForm from './components/SetupForm';
+
+import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import { AppState, CardColor, ClassicFlashcard, GameMode, QuizFlashcard, StudyResult, User, UserRole, Deck, Subject, Lobby, LobbyMember } from './types';
 import { generateFlashcards } from './services/geminiService';
 import LoadingView from './components/LoadingView';
-import StudySession from './components/StudySession';
-import ResultsScreen from './components/ResultsScreen';
-import EditCardsView from './components/EditCardsView';
-import LoginPage from './components/LoginPage';
-import DashboardLayout from './components/DashboardLayout';
-import YourCardsPage from './components/YourCardsPage';
-import AdminDashboard from './components/AdminDashboard';
 import { supabase } from './services/supabaseClient';
+import { getErrorMessage } from './utils';
+
+// Lazy load page components for faster initial load
+const SetupForm = lazy(() => import('./components/SetupForm'));
+const StudySession = lazy(() => import('./components/StudySession'));
+const ResultsScreen = lazy(() => import('./components/ResultsScreen'));
+const EditCardsView = lazy(() => import('./components/EditCardsView'));
+const LoginPage = lazy(() => import('./components/LoginPage'));
+const DashboardLayout = lazy(() => import('./components/DashboardLayout'));
+const YourCardsPage = lazy(() => import('./components/YourCardsPage'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const ProfilePage = lazy(() => import('./components/ProfilePage'));
+const SubjectsPage = lazy(() => import('./components/SubjectsPage'));
+const YourSubjectsPage = lazy(() => import('./components/YourSubjectsPage'));
+const SubjectRoomPage = lazy(() => import('./components/SubjectRoomPage'));
+const StudentSubjectDecksPage = lazy(() => import('./components/StudentSubjectDecksPage'));
+const YourFriendsPage = lazy(() => import('./components/YourFriendsPage'));
+const CoopLobbyPage = lazy(() => import('./components/CoopLobbyPage'));
+const CoopGamePage = lazy(() => import('./components/CoopGamePage'));
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [appState, setAppState] = useState<AppState>(AppState.LOGIN);
   const [flashcards, setFlashcards] = useState<(ClassicFlashcard | QuizFlashcard)[]>([]);
-  const [decks, setDecks] = useState<Deck[]>([]);
   const [studyResults, setStudyResults] = useState<StudyResult[]>([]);
   const [deckConfig, setDeckConfig] = useState<{title: string, color: CardColor, mode: GameMode} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [editingDeck, setEditingDeck] = useState<Deck | null>(null);
-  const generationTask = useRef<number>(0);
-  
-  const fetchDecks = useCallback(async (userId: string) => {
-    const { data, error: fetchError } = await supabase
-      .from('decks')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (fetchError) {
-      console.error('Error fetching decks:', fetchError);
-      setError(`Failed to load your decks. The database tables might not be set up correctly. (Details: ${fetchError.message})`);
-    } else {
-      setDecks(data || []);
-    }
-  }, []);
+  const [currentStudiedDeck, setCurrentStudiedDeck] = useState<Deck | null>(null);
+  const [currentSubject, setCurrentSubject] = useState<Subject | null>(null);
+  const [currentLobby, setCurrentLobby] = useState<Lobby | null>(null);
+  const [lobbyMembers, setLobbyMembers] = useState<LobbyMember[]>([]);
+  const generationTask = React.useRef<number>(0);
 
   useEffect(() => {
+    let isMounted = true;
     setLoadingInitial(true);
 
-    const getProfileWithRetry = async (userId: string, retries = 10, delay = 1000) => {
-      for (let i = 0; i < retries; i++) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-        if (profile) return profile;
-        await new Promise(res => setTimeout(res, delay));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) {
+        return;
       }
-      return null;
-    };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setError(null); // Clear previous errors on auth state change
       if (session) {
-        const profile = await getProfileWithRetry(session.user.id);
-        
-        if (profile) {
-          const loggedInUser = { id: session.user.id, email: session.user.email!, role: profile.role as UserRole };
-          setUser(loggedInUser);
-          if (profile.role === UserRole.ADMIN) {
-            setAppState(AppState.ADMIN_DASHBOARD);
-          } else {
-            await fetchDecks(session.user.id);
-            setAppState(AppState.YOUR_CARDS);
+        const basicUser: User = { 
+          id: session.user.id, 
+          email: session.user.email!, 
+          role: UserRole.STUDENT,
+          full_name: session.user.email!,
+        };
+        setUser(basicUser);
+        setLoadingInitial(false);
+
+        (async () => {
+          try {
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+
+            if (!isMounted) return;
+
+            if (profileError || !profile) {
+              console.error("CRITICAL: Profile not found for session. Signing out.", getErrorMessage(profileError));
+              await supabase.auth.signOut();
+              return;
+            }
+            
+            const fullUser: User = { 
+              id: session.user.id, 
+              email: session.user.email!, 
+              role: profile.role as UserRole,
+              full_name: profile.full_name || session.user.email!,
+              course: profile.course,
+            };
+            
+            setUser(fullUser);
+            
+            if (_event === 'INITIAL_SESSION' || _event === 'SIGNED_IN') {
+               if (fullUser.role === UserRole.ADMIN) {
+                  setAppState(AppState.ADMIN_DASHBOARD);
+              } else {
+                  setAppState(AppState.YOUR_CARDS);
+              }
+            }
+          } catch (e) {
+             if (isMounted) {
+                console.error("Error fetching profile, signing out:", getErrorMessage(e));
+                await supabase.auth.signOut();
+             }
           }
-        } else {
-          setError("Your user profile could not be loaded. This can happen right after sign-up due to a database delay. Please try signing in again.");
-          console.error("User profile not found after multiple attempts. Signing out.");
-          await supabase.auth.signOut();
-        }
+        })();
       } else {
         setUser(null);
-        setDecks([]);
         setAppState(AppState.LOGIN);
+        generationTask.current = 0;
+        setFlashcards([]);
+        setStudyResults([]);
+        setDeckConfig(null);
+        setEditingDeck(null);
+        setCurrentStudiedDeck(null);
+        setCurrentSubject(null);
+        setCurrentLobby(null);
+        setLobbyMembers([]);
+        setError(null);
+        setLoadingInitial(false);
       }
-      setLoadingInitial(false);
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchDecks]);
-
-  const handleSignIn = useCallback(async (credentials: { email: string; password: string }) => {
-    setError(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: credentials.email,
-      password: credentials.password,
-    });
-    if (error) throw error;
   }, []);
 
-  const handleSignUp = useCallback(async (credentials: { email: string; password: string; role: UserRole }) => {
+  // Realtime subscription for lobby members
+  useEffect(() => {
+    if (!currentLobby) return;
+
+    const channel = supabase
+      .channel(`lobby_${currentLobby.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lobby_members',
+          filter: `lobby_id=eq.${currentLobby.id}`,
+        },
+        async (payload) => {
+          console.log('Lobby member change received!', payload);
+          // Refetch all members to ensure consistency
+          const { data, error } = await supabase
+            .from('lobby_members')
+            .select('*, profile:profiles(full_name)')
+            .eq('lobby_id', currentLobby.id);
+          
+          if (error) {
+            console.error('Error refetching lobby members:', error);
+          } else {
+            setLobbyMembers(data as any[] || []);
+          }
+        }
+      )
+      .subscribe();
+      
+      // Initial fetch of members
+      (async () => {
+         const { data, error } = await supabase
+            .from('lobby_members')
+            .select('*, profile:profiles(full_name)')
+            .eq('lobby_id', currentLobby.id);
+        if (error) {
+            setError(`Failed to fetch lobby members: ${getErrorMessage(error)}`);
+        } else {
+            setLobbyMembers(data as any[] || []);
+        }
+      })();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentLobby]);
+
+
+  const handleSignIn = useCallback(async (credentials: { email: string; password: string }) => {
+    const { error } = await supabase.auth.signInWithPassword(credentials);
+    if (error) {
+        throw error;
+    }
+  }, []);
+
+  const handleSignUp = useCallback(async (credentials: { email: string; password: string; role: UserRole; fullName: string; course: string; }) => {
     setError(null);
-    const { error } = await supabase.auth.signUp({
-      email: credentials.email,
-      password: credentials.password,
-      options: { data: { role: credentials.role } },
-    });
-    if (error) throw error;
-    alert('Sign up successful! You will now be logged in.');
+    try {
+        const { error } = await supabase.auth.signUp({
+            email: credentials.email,
+            password: credentials.password,
+            options: { 
+                data: { 
+                    role: credentials.role,
+                    full_name: credentials.fullName,
+                    course: credentials.course || null,
+                } 
+            },
+        });
+        if (error) throw error;
+        alert('Sign up successful! Please check your email to confirm your account. You will then be able to log in.');
+    } catch (err) {
+        const errorMessage = getErrorMessage(err);
+        if (errorMessage.includes("schema cache")) {
+            throw new Error("SCHEMA_CACHE_ERROR:Sign-up failed due to a database sync issue. A page refresh is required to sync with the latest database changes.");
+        }
+        throw err;
+    }
   }, []);
 
   const handleLogout = useCallback(async () => {
-    generationTask.current = 0;
-    await supabase.auth.signOut();
-    setFlashcards([]);
-    setStudyResults([]);
-    setDeckConfig(null);
     setError(null);
+    try {
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) {
+        throw signOutError;
+      }
+    } catch (e) {
+      console.error("Error during sign out:", getErrorMessage(e));
+      setError(`Failed to log out. Error: ${getErrorMessage(e)}`);
+      setUser(null);
+      setAppState(AppState.LOGIN);
+    }
+  }, []);
+  
+  const handleContinueAsGuest = useCallback(() => {
+    setError(null);
+    setAppState(AppState.FORM);
+  }, []);
+  
+  const handleNavigate = useCallback((page: AppState) => {
+    if ([AppState.YOUR_CARDS, AppState.PROFILE, AppState.SUBJECTS, AppState.STUDENT_SUBJECTS, AppState.YOUR_FRIENDS].includes(page)) {
+      generationTask.current = 0;
+      setFlashcards([]);
+      setStudyResults([]);
+      setDeckConfig(null);
+      setError(null);
+      setEditingDeck(null);
+      setCurrentStudiedDeck(null);
+      setCurrentSubject(null);
+      setCurrentLobby(null);
+      setLobbyMembers([]);
+    }
+    setAppState(page);
+  }, []);
+  
+  const handleNavigateToSubjectRoom = useCallback((subject: Subject) => {
+    setCurrentSubject(subject);
+    setAppState(AppState.SUBJECT_ROOM);
   }, []);
 
-  const handleStartCreateNew = useCallback(() => {
-    setAppState(AppState.FORM);
+  const handleNavigateToStudentDecks = useCallback((subject: Subject) => {
+    setCurrentSubject(subject);
+    setAppState(AppState.STUDENT_SUBJECT_DECKS);
   }, []);
 
   const handleBackToDecks = useCallback(() => {
-     generationTask.current = 0; // Invalidate any running generation task
-     setFlashcards([]);
-     setStudyResults([]);
-     setDeckConfig(null);
-     setError(null);
-     setEditingDeck(null);
-     setAppState(AppState.YOUR_CARDS);
+    handleNavigate(AppState.YOUR_CARDS);
+  }, [handleNavigate]);
+
+  const handleStartCreateNew = useCallback(() => {
+    setAppState(AppState.FORM);
   }, []);
 
   const handleFormSubmit = useCallback(async (
@@ -149,9 +277,8 @@ const App: React.FC = () => {
       }
     } catch (e) {
       if (generationTask.current === taskId) {
-        console.error(e);
-        const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-        setError(`Failed to generate flashcards. Please check your input and try again. Error: ${errorMessage}`);
+        console.error("Error generating flashcards:", getErrorMessage(e));
+        setError(`Failed to generate flashcards. Please check your input and try again. Error: ${getErrorMessage(e)}`);
         setAppState(AppState.FORM);
       }
     }
@@ -163,6 +290,7 @@ const App: React.FC = () => {
     const taskId = Date.now();
     generationTask.current = taskId;
     setAppState(AppState.SAVING_DECK);
+    setError(null);
 
     const { data: deckData, error: deckError } = await supabase
       .from('decks')
@@ -176,11 +304,16 @@ const App: React.FC = () => {
       .single();
 
     if (deckError) {
-      if (generationTask.current === taskId) {
-        setError(`Error saving deck: ${deckError.message}`);
-        setAppState(AppState.EDITING);
-      }
-      return;
+        if (generationTask.current === taskId) {
+            const errorMessage = getErrorMessage(deckError);
+            if (errorMessage.includes("schema cache")) {
+                setError("SCHEMA_CACHE_ERROR:Failed to save deck due to a database sync issue. A page refresh is required to sync with the latest database changes.");
+            } else {
+                setError(`Error saving deck: ${errorMessage}`);
+            }
+            setAppState(AppState.EDITING);
+        }
+        return;
     }
 
     const flashcardsToInsert = editedCards.map(card => {
@@ -196,8 +329,8 @@ const App: React.FC = () => {
 
       if (cardsError) {
         if (generationTask.current === taskId) {
-          setError(`Error saving flashcards: ${cardsError.message}`);
-          await supabase.from('decks').delete().eq('id', deckData.id); // Clean up failed deck
+          setError(`Error saving flashcards: ${getErrorMessage(cardsError)}`);
+          await supabase.from('decks').delete().eq('id', deckData.id);
           setAppState(AppState.EDITING);
         }
         return;
@@ -205,21 +338,28 @@ const App: React.FC = () => {
     }
     
     if (generationTask.current === taskId) {
-      await fetchDecks(user.id);
+      setCurrentStudiedDeck(deckData);
       setFlashcards(editedCards);
       setDeckConfig({ ...deckConfig, title: newTitle });
       setAppState(AppState.STUDYING);
     }
-  }, [user, deckConfig, fetchDecks]);
+  }, [user, deckConfig]);
+
+  const handleStartGuestStudySession = useCallback((editedCards: (ClassicFlashcard | QuizFlashcard)[], newTitle: string) => {
+    if (!deckConfig) return;
+    setFlashcards(editedCards);
+    setDeckConfig({ ...deckConfig, title: newTitle });
+    setCurrentStudiedDeck(null); // Explicitly null for guests
+    setAppState(AppState.STUDYING);
+  }, [deckConfig]);
   
   const handleStudyDeck = useCallback(async (deck: Deck) => {
-    setAppState(AppState.GENERATING); // Show loading view while fetching cards
+    setCurrentStudiedDeck(deck);
     const { data, error } = await supabase.from('flashcards').select('*').eq('deck_id', deck.id);
 
     if (error) {
-      setError(`Error fetching cards: ${error.message}`);
-      setAppState(AppState.YOUR_CARDS);
-      return;
+      setError(`Error fetching cards: ${getErrorMessage(error)}`);
+      throw error;
     }
 
     const fetchedCards = data.map(c => {
@@ -232,14 +372,14 @@ const App: React.FC = () => {
     setFlashcards(fetchedCards);
     setDeckConfig({ title: deck.title, color: deck.color, mode: deck.mode });
     setAppState(AppState.STUDYING);
-  }, []);
+  }, [setError]);
 
   const handleEditDeck = useCallback(async (deck: Deck) => {
     setAppState(AppState.GENERATING);
     const { data, error } = await supabase.from('flashcards').select('*').eq('deck_id', deck.id);
 
     if (error) {
-      setError(`Error fetching cards for editing: ${error.message}`);
+      setError(`Error fetching cards for editing: ${getErrorMessage(error)}`);
       setAppState(AppState.YOUR_CARDS);
       return;
     }
@@ -257,27 +397,6 @@ const App: React.FC = () => {
     setAppState(AppState.EDITING);
   }, []);
 
-  const handleDeleteDeck = useCallback(async (deckId: number) => {
-    if (!user) return;
-    if (!window.confirm("Are you sure you want to permanently delete this deck and all its cards? This action cannot be undone.")) {
-      return;
-    }
-
-    const { error: cardsError } = await supabase.from('flashcards').delete().eq('deck_id', deckId);
-    if (cardsError) {
-      setError(`Failed to delete cards in deck: ${cardsError.message}`);
-      return;
-    }
-    
-    const { error: deckError } = await supabase.from('decks').delete().eq('id', deckId);
-    if (deckError) {
-      setError(`Failed to delete deck: ${deckError.message}`);
-      return;
-    }
-
-    await fetchDecks(user.id);
-  }, [user, fetchDecks]);
-
   const handleUpdateDeck = useCallback(async (editedCards: (ClassicFlashcard | QuizFlashcard)[], newTitle: string) => {
     if (!user || !editingDeck || !deckConfig) return;
     
@@ -293,7 +412,7 @@ const App: React.FC = () => {
 
       if (deckUpdateError) {
         if (generationTask.current === taskId) {
-          setError(`Error updating deck title: ${deckUpdateError.message}`);
+          setError(`Error updating deck title: ${getErrorMessage(deckUpdateError)}`);
           setAppState(AppState.EDITING);
         }
         return;
@@ -303,7 +422,7 @@ const App: React.FC = () => {
     const { error: deleteError } = await supabase.from('flashcards').delete().eq('deck_id', editingDeck.id);
     if (deleteError) {
        if (generationTask.current === taskId) {
-        setError(`Error updating deck (card deletion step): ${deleteError.message}`);
+        setError(`Error updating deck (card deletion step): ${getErrorMessage(deleteError)}`);
         setAppState(AppState.EDITING);
       }
       return;
@@ -321,7 +440,7 @@ const App: React.FC = () => {
       const { error: insertError } = await supabase.from('flashcards').insert(flashcardsToInsert);
       if (insertError) {
         if (generationTask.current === taskId) {
-          setError(`Error updating deck (card insertion step): ${insertError.message}`);
+          setError(`Error updating deck (card insertion step): ${getErrorMessage(insertError)}`);
           setAppState(AppState.EDITING);
         }
         return;
@@ -329,17 +448,52 @@ const App: React.FC = () => {
     }
 
     if (generationTask.current === taskId) {
-      await fetchDecks(user.id);
       setFlashcards([]);
       setEditingDeck(null);
       setDeckConfig(null);
       setAppState(AppState.YOUR_CARDS);
     }
-  }, [user, editingDeck, deckConfig, fetchDecks]);
+  }, [user, editingDeck, deckConfig]);
 
-  const handleSessionComplete = useCallback((results: StudyResult[]) => {
+  const handleSessionComplete = useCallback(async (results: StudyResult[]) => {
+    if (user && currentStudiedDeck) {
+        const correctCount = results.filter(r => r.isCorrect).length;
+        const totalCards = results.length;
+        const scorePercentage = totalCards > 0 ? Math.round((correctCount / totalCards) * 100) : 0;
+
+        const { error: sessionError } = await supabase.from('study_sessions').insert({
+            user_id: user.id,
+            deck_id: currentStudiedDeck.id,
+            score_percentage: scorePercentage,
+            correct_count: correctCount,
+            total_cards: totalCards,
+        });
+
+        if (sessionError) {
+            console.error('Error saving study session:', getErrorMessage(sessionError));
+        }
+    }
     setStudyResults(results);
     setAppState(AppState.RESULTS);
+  }, [user, currentStudiedDeck]);
+
+  const handleInviteToLobby = useCallback(async (inviteeId: string) => {
+    setError(null);
+    try {
+        const { data, error: rpcError } = await supabase.rpc('create_lobby_and_invite', {
+            invitee_id: inviteeId
+        });
+        if (rpcError) throw rpcError;
+        
+        if (data && data.length > 0) {
+            setCurrentLobby(data[0]);
+            setAppState(AppState.COOP_LOBBY);
+        } else {
+            throw new Error("Failed to create lobby: No data returned.");
+        }
+    } catch (err) {
+        setError(`Failed to create lobby: ${getErrorMessage(err)}`);
+    }
   }, []);
 
   const handleRestart = useCallback(() => {
@@ -347,82 +501,158 @@ const App: React.FC = () => {
     setAppState(AppState.STUDYING);
   }, []);
 
-  const renderDashboardContent = () => {
+  const clearError = useCallback(() => setError(null), []);
+
+  const renderContent = () => {
+    if (loadingInitial) {
+      return <LoadingView title="CardZap" message="Connecting..." />;
+    }
+
+    if (!user) {
+        return <LoginPage onSignIn={handleSignIn} onSignUp={handleSignUp} onContinueAsGuest={handleContinueAsGuest} error={error} />;
+    }
+
     switch (appState) {
-      case AppState.YOUR_CARDS:
-        return <YourCardsPage onCreateNew={handleStartCreateNew} decks={decks} onStudyDeck={handleStudyDeck} onEditDeck={handleEditDeck} onDeleteDeck={handleDeleteDeck} error={error} />;
-      case AppState.ADMIN_DASHBOARD:
-        return <AdminDashboard />;
       case AppState.FORM:
         return <SetupForm onSubmit={handleFormSubmit} error={error} onBack={handleBackToDecks} />;
+        
       case AppState.GENERATING_NEW_DECK:
-        return <LoadingView onCancel={handleBackToDecks} />;
+        return <LoadingView title="Generating Your Flashcards..." message="The AI is working its magic. This might take a moment." onCancel={handleBackToDecks} />;
+        
       case AppState.SAVING_DECK:
-        return <LoadingView title="Saving Your Deck..." message="Please wait while we save your changes." onCancel={handleBackToDecks} />;
+        return <LoadingView title="Saving Your Deck..." message="Please wait while we store your new cards." />;
+        
       case AppState.GENERATING:
-        return <LoadingView title="Loading Deck..." message="Just a moment, we're getting your cards ready." />;
+        return <LoadingView title="Loading Deck..." message="Getting your cards ready for you." />;
+
       case AppState.EDITING:
-        if (deckConfig) {
-            return (
-              <EditCardsView
-                initialCards={flashcards}
-                deckConfig={deckConfig}
-                onComplete={editingDeck ? handleUpdateDeck : handleSaveDeckAndStudy}
-                onBack={handleBackToDecks}
-                isNewDeck={!editingDeck}
-              />
-            );
-          }
-          return <LoadingView />;
+        if (!deckConfig) return <p>Error: Deck configuration is missing.</p>;
+        return <EditCardsView 
+                  initialCards={flashcards} 
+                  deckConfig={deckConfig} 
+                  onComplete={editingDeck ? handleUpdateDeck : handleSaveDeckAndStudy} 
+                  onBack={editingDeck ? handleBackToDecks : () => setAppState(AppState.FORM)}
+                  isNewDeck={!editingDeck}
+                  user={user}
+                  onStartGuestSession={handleStartGuestStudySession}
+                  error={error}
+                  clearError={clearError}
+                />;
+                
       case AppState.STUDYING:
-        if (deckConfig && flashcards.length > 0) {
-          return (
-            <StudySession 
-              cards={flashcards}
-              mode={deckConfig.mode}
-              color={deckConfig.color}
-              title={deckConfig.title}
-              onSessionComplete={handleSessionComplete}
-              onExit={handleBackToDecks}
-            />
-          );
-        }
-        return <LoadingView />;
+        if (!deckConfig) return <p>Error: Deck configuration is missing.</p>;
+        return <StudySession 
+                  cards={flashcards} 
+                  mode={deckConfig.mode} 
+                  color={deckConfig.color}
+                  title={deckConfig.title}
+                  onSessionComplete={handleSessionComplete}
+                  onExit={handleBackToDecks}
+               />;
+               
       case AppState.RESULTS:
+        if (!deckConfig) return <p>Error: Deck configuration is missing.</p>;
         return <ResultsScreen 
                   results={studyResults} 
-                  onRestart={handleRestart} 
-                  onBackToDecks={handleBackToDecks} 
-                  title={deckConfig?.title || 'Study Results'}
-                />;
-      default:
-        if (user?.role === UserRole.ADMIN) {
-          return <AdminDashboard />;
+                  onRestart={handleRestart}
+                  onBackToDecks={handleBackToDecks}
+                  title={deckConfig.title}
+               />;
+      
+      case AppState.COOP_LOBBY:
+        if (!currentLobby) return <LoadingView title="Redirecting..." message="Lobby not found." />;
+        return <CoopLobbyPage 
+                  user={user} 
+                  lobby={currentLobby} 
+                  members={lobbyMembers} 
+                  onLeaveLobby={() => handleNavigate(AppState.YOUR_FRIENDS)} 
+                  onStartGame={() => setAppState(AppState.COOP_GAME)}
+               />;
+
+      case AppState.COOP_GAME:
+        if (!currentLobby) return <LoadingView title="Redirecting..." message="Lobby not found." />;
+        return <CoopGamePage 
+                 lobby={currentLobby} 
+                 members={lobbyMembers} 
+                 onLeaveGame={() => handleNavigate(AppState.YOUR_FRIENDS)}
+               />;
+
+      case AppState.ADMIN_DASHBOARD:
+      case AppState.YOUR_CARDS:
+      case AppState.PROFILE:
+      case AppState.SUBJECTS:
+      case AppState.STUDENT_SUBJECTS:
+      case AppState.STUDENT_SUBJECT_DECKS:
+      case AppState.SUBJECT_ROOM:
+      case AppState.YOUR_FRIENDS:
+        let pageContent;
+        if (appState === AppState.ADMIN_DASHBOARD) {
+          pageContent = <AdminDashboard />;
+        } else if (appState === AppState.YOUR_CARDS) {
+          pageContent = <YourCardsPage 
+                          user={user}
+                          onCreateNew={handleStartCreateNew} 
+                          onStudyDeck={handleStudyDeck}
+                          onEditDeck={handleEditDeck}
+                          error={error}
+                        />;
+        } else if (appState === AppState.PROFILE) {
+          pageContent = <ProfilePage user={user} />;
+        } else if (appState === AppState.SUBJECTS) {
+           pageContent = <SubjectsPage 
+                            user={user} 
+                            onNavigateToSubjectRoom={handleNavigateToSubjectRoom}
+                          />;
+        } else if (appState === AppState.STUDENT_SUBJECTS) {
+           pageContent = <YourSubjectsPage 
+                            user={user} 
+                            onViewDecks={handleNavigateToStudentDecks}
+                          />;
+        } else if (appState === AppState.STUDENT_SUBJECT_DECKS && currentSubject) {
+          pageContent = <StudentSubjectDecksPage 
+                            subject={currentSubject} 
+                            user={user}
+                            onBack={() => handleNavigate(AppState.STUDENT_SUBJECTS)}
+                            onStudyDeck={handleStudyDeck}
+                          />;
+        } else if (appState === AppState.SUBJECT_ROOM && currentSubject) {
+          pageContent = <SubjectRoomPage user={user} subject={currentSubject} onBack={() => handleNavigate(AppState.SUBJECTS)} />;
+        } else if (appState === AppState.YOUR_FRIENDS) {
+          pageContent = <YourFriendsPage user={user} onInviteToLobby={handleInviteToLobby} />;
+        } else if ((appState === AppState.SUBJECT_ROOM || appState === AppState.STUDENT_SUBJECT_DECKS) && !currentSubject) {
+          handleNavigate(user.role === UserRole.STUDENT ? AppState.STUDENT_SUBJECTS : AppState.SUBJECTS);
+          return <LoadingView title="Redirecting..." message="No subject selected."/>;
         }
-        return <YourCardsPage onCreateNew={handleStartCreateNew} decks={decks} onStudyDeck={handleStudyDeck} onEditDeck={handleEditDeck} onDeleteDeck={handleDeleteDeck} error={error} />;
+
+        return (
+          <DashboardLayout user={user} onLogout={handleLogout} activePage={appState} onNavigate={handleNavigate}>
+            {pageContent}
+          </DashboardLayout>
+        );
+
+      default:
+        return (
+             <DashboardLayout user={user} onLogout={handleLogout} activePage={AppState.YOUR_CARDS} onNavigate={handleNavigate}>
+                <YourCardsPage 
+                    user={user}
+                    onCreateNew={handleStartCreateNew} 
+                    onStudyDeck={handleStudyDeck}
+                    onEditDeck={handleEditDeck}
+                    error={"Invalid application state. Navigated to safety."}
+                />
+            </DashboardLayout>
+        );
     }
   };
 
-  if (loadingInitial) {
-    return (
-      <div className="bg-primary-100 min-h-screen flex items-center justify-center">
-        <LoadingView title="Loading CardZap..." message="Getting everything ready for you." />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-       <div className="bg-primary-100 text-primary-700 min-h-screen font-sans flex items-center justify-center p-4">
-          <LoginPage onSignIn={handleSignIn} onSignUp={handleSignUp} error={error} />
-       </div>
-    );
-  }
+  const isDashboard = user && [AppState.ADMIN_DASHBOARD, AppState.YOUR_CARDS, AppState.PROFILE, AppState.SUBJECTS, AppState.STUDENT_SUBJECTS, AppState.STUDENT_SUBJECT_DECKS, AppState.SUBJECT_ROOM, AppState.YOUR_FRIENDS, AppState.COOP_LOBBY, AppState.COOP_GAME].includes(appState);
 
   return (
-    <DashboardLayout user={user} onLogout={handleLogout}>
-      {renderDashboardContent()}
-    </DashboardLayout>
+    <div className={`min-h-screen font-sans transition-colors duration-300 ${isDashboard ? 'bg-primary-100' : 'bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center p-4'}`}>
+      <Suspense fallback={<LoadingView title="Loading Page..." message="Getting things ready for you." />}>
+        {renderContent()}
+      </Suspense>
+    </div>
   );
 };
 
