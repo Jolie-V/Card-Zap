@@ -14,11 +14,11 @@ const classicSchema = {
     properties: {
       question: {
         type: Type.STRING,
-        description: "The question for the flashcard. It should be clear and concise.",
+        description: "A concise question for the flashcard, focusing on a key concept. Keep it short enough to be easily readable on a small card.",
       },
       answer: {
         type: Type.STRING,
-        description: "The answer to the question. It should be accurate and to the point.",
+        description: "A brief and direct answer to the question. Aim for a few key words or a single short sentence.",
       },
     },
     required: ["question", "answer"],
@@ -32,21 +32,31 @@ const quizSchema = {
     properties: {
       question: {
         type: Type.STRING,
-        description: "The multiple-choice question for the flashcard.",
+        description: "A concise multiple-choice question for the flashcard. It should be clear and not too long.",
       },
       options: {
         type: Type.ARRAY,
         items: { type: Type.STRING },
-        description: "An array of 4 possible answers. One of them must be correct.",
+        description: "An array of 4 possible answers. Each option should be brief and to the point. One of them must be correct.",
       },
-      correctAnswer: {
+      correctanswer: {
         type: Type.STRING,
         description: "The correct answer from the 'options' array.",
       },
     },
-    required: ["question", "options", "correctAnswer"],
+    required: ["question", "options", "correctanswer"],
   },
 };
+
+// Helper function to shuffle an array using Fisher-Yates algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+}
 
 export async function generateFlashcards(
   inputText: string,
@@ -55,14 +65,17 @@ export async function generateFlashcards(
 ): Promise<(ClassicFlashcard | QuizFlashcard)[]> {
   const model = 'gemini-2.5-flash';
 
-  const systemInstruction = `You are an expert study assistant. Your sole purpose is to analyze text and generate high-quality flashcards in a structured JSON format. You must strictly adhere to the provided JSON schema. Do not add any commentary, explanations, or introductory text. Your output must be only the JSON array, starting with '[' and ending with ']'.`;
+  const systemInstruction = `You are an expert study assistant. Your purpose is to analyze the provided text, identify key concepts, and generate high-quality flashcards in a structured JSON format. Your output must strictly be a JSON array, starting with '[' and ending with ']'. Do not add any commentary, explanations, or introductory text. Crucially, all generated content must be highly summarized and concise to fit well on a flashcard. Questions should be short and direct. Answers should be as brief as possible, ideally a few words or a single short sentence.`;
   
+  // We append a random identifier to the prompt to discourage caching
   const prompt = `From the following text, generate up to ${cardCount} flashcards in ${mode} mode.
 
 Source Text:
 ---
 ${inputText}
----`;
+---
+
+Generation ID: ${Date.now()}`;
 
   const schema = mode === GameMode.CLASSIC ? classicSchema : quizSchema;
   let rawResponseText = "";
@@ -75,6 +88,8 @@ ${inputText}
         systemInstruction,
         responseMimeType: "application/json",
         responseSchema: schema,
+        temperature: 1,
+        seed: Math.floor(Math.random() * 10000000),
       },
     });
     
@@ -111,7 +126,13 @@ ${inputText}
     if (mode === GameMode.CLASSIC) {
         return validatedAndSlicedData.filter(c => c.question && c.answer) as ClassicFlashcard[];
     } else {
-        return validatedAndSlicedData.filter(c => c.question && Array.isArray(c.options) && c.options.length > 0 && c.correctAnswer) as QuizFlashcard[];
+        const quizCards = validatedAndSlicedData.filter(c => c.question && Array.isArray(c.options) && c.options.length > 0 && c.correctanswer) as QuizFlashcard[];
+        
+        // Shuffle the options for each card to ensure the correct answer isn't biased towards a specific position (like B or C).
+        return quizCards.map(card => ({
+            ...card,
+            options: shuffleArray(card.options)
+        }));
     }
 
   } catch (error) {

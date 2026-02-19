@@ -1,4 +1,5 @@
 {
   "name": "CardZap",
-  "description": "An AI-powered application that takes user-provided text or files (PDF, DOCX, TXT), summarizes the content, and generates interactive flashcards for studying. Users can choose between classic flip-cards or a multiple-choice quiz mode."
+  "description": "An AI-powered application that takes user-provided text or files (PDF, DOCX, TXT), summarizes the content, and generates interactive flashcards for studying. Users can choose between classic flip-cards or a multiple-choice quiz mode.",
+  "requestFramePermissions": []
 }

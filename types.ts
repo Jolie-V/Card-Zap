@@ -1,21 +1,4 @@
-export enum AppState {
-  LOGIN = 'LOGIN',
-  YOUR_CARDS = 'YOUR_CARDS',
-  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
-  FORM = 'FORM',
-  GENERATING_NEW_DECK = 'GENERATING_NEW_DECK',
-  GENERATING = 'GENERATING',
-  SAVING_DECK = 'SAVING_DECK',
-  EDITING = 'EDITING',
-  STUDYING = 'STUDYING',
-  RESULTS = 'RESULTS',
-  PROFILE = 'PROFILE',
-  SUBJECTS = 'SUBJECTS', // Teacher's create/manage page
-  STUDENT_SUBJECTS = 'STUDENT_SUBJECTS', // Student's enrolled subjects page
-  STUDENT_SUBJECT_DECKS = 'STUDENT_SUBJECT_DECKS', // Student's view of decks in a subject
-  SUBJECT_ROOM = 'SUBJECT_ROOM',
-  YOUR_FRIENDS = 'YOUR_FRIENDS',
-}
+
 
 export enum GameMode {
   CLASSIC = 'CLASSIC',
@@ -44,9 +27,29 @@ export enum EnrollmentStatus {
   APPROVED = 'approved',
 }
 
-export enum FriendshipStatus {
-  PENDING = 'pending',
-  ACCEPTED = 'accepted',
+export enum ThemePreference {
+  LIGHT = 'light',
+  DARK = 'dark',
+  SYSTEM = 'system',
+}
+
+export enum AppState {
+  // Student
+  YOUR_CARDS = 'YOUR_CARDS',
+  STUDENT_SUBJECTS = 'STUDENT_SUBJECTS',
+
+  // Teacher
+  SUBJECTS = 'SUBJECTS',
+
+  // Admin
+  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
+  ADMIN_STUDENTS = 'ADMIN_STUDENTS',
+  ADMIN_TEACHERS = 'ADMIN_TEACHERS',
+  ADMIN_SUBJECTS = 'ADMIN_SUBJECTS',
+
+  // Shared
+  PROFILE = 'PROFILE',
+  SETTINGS = 'SETTINGS',
 }
 
 
@@ -56,19 +59,23 @@ export interface User {
   role: UserRole;
   full_name: string;
   course?: string;
+  preferred_theme: ThemePreference;
+  avatar_url?: string;
 }
 
 export interface Deck {
-  id: number;
+  id: string;
   user_id: string;
   title: string;
   color: CardColor;
   mode: GameMode;
   created_at: string;
+  is_assessment: boolean;
+  highest_score?: number | null;
 }
 
 export interface Subject {
-  id: number;
+  id: string;
   teacher_id: string;
   title: string;
   description?: string;
@@ -83,7 +90,7 @@ export interface EnrolledSubject extends Subject {
 
 
 export interface SubjectEnrollment {
-  id: number;
+  id: string;
   status: EnrollmentStatus;
   profiles: {
     full_name: string;
@@ -91,26 +98,33 @@ export interface SubjectEnrollment {
   };
 }
 
-export interface Friend {
-    friendship_id: number;
-    user_id: string; // The friend's user ID
-    full_name: string;
-    course: string | null;
+export interface AdminStudentView {
+  id: string;
+  full_name: string;
+  email: string;
+  course: string | null;
+  avatar_url: string | null;
+  created_at: string;
 }
 
-export interface FriendRequest {
-    friendship_id: number;
-    requester_id: string;
-    full_name: string;
-    course: string | null;
+export interface AdminTeacherView {
+  id: string;
+  full_name: string;
+  email: string;
+  course: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  subject_count: number;
 }
 
-export interface StudentProfile {
-    id: string;
-    full_name: string;
-    course: string | null;
+export interface AdminSubjectView {
+  id: number;
+  title: string;
+  subject_code: string;
+  teacher_name: string;
+  student_count: number;
+  created_at: string;
 }
-
 
 export interface ClassicFlashcard {
   question: string;
@@ -120,10 +134,26 @@ export interface ClassicFlashcard {
 export interface QuizFlashcard {
   question: string;
   options: string[];
-  correctAnswer: string;
+  correctanswer: string;
 }
 
 export interface StudyResult {
   card: ClassicFlashcard | QuizFlashcard;
   isCorrect: boolean;
+}
+
+export interface Friend {
+  friendship_id: number;
+  id: string; // profile id
+  full_name: string;
+  avatar_url?: string;
+  course?: string;
+}
+
+export interface FriendRequest {
+  friendship_id: number;
+  id: string; // profile id of requester
+  full_name: string;
+  avatar_url?: string;
+  course?: string;
 }

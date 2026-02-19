@@ -1,66 +1,89 @@
 
-
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { UserRole } from '../types';
-import { CardZapLogo, RefreshIcon } from './icons';
+import { CardZapLogo, RefreshIcon, EyeIcon, CheckCircleIcon } from './icons';
 import { getErrorMessage } from '../utils';
+import { useAuth } from './AuthProvider';
 
-interface LoginPageProps {
-    onSignIn: (credentials: {email: string, password: string}) => Promise<void>;
-    onSignUp: (credentials: {email: string, password: string, role: UserRole, fullName: string, course: string}) => Promise<void>;
-    onContinueAsGuest: () => void;
-    error: string | null;
-}
+type Mode = 'signIn' | 'signUp';
 
-const LoginPage: React.FC<LoginPageProps> = ({ onSignIn, onSignUp, onContinueAsGuest, error: propError }) => {
-    const [isSignIn, setIsSignIn] = useState(true);
+const LoginPage: React.FC = () => {
+    const { signIn, signUp, error: authError, loading, clearError } = useAuth();
+    const navigate = useNavigate();
+
+    const [mode, setMode] = useState<Mode>('signIn');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [fullName, setFullName] = useState('');
     const [course, setCourse] = useState('');
     const [role, setRole] = useState<UserRole>(UserRole.STUDENT);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(propError);
-    const isConnectionError = propError?.includes('authentication service is not responding');
-    const isSchemaError = error?.startsWith('SCHEMA_CACHE_ERROR:');
-    const errorMessage = error?.replace('SCHEMA_CACHE_ERROR:', '');
+    const [error, setError] = useState<string | null>(authError);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+    // Check for generic connection error
+    const isConnectionError = authError?.includes('authentication service is not responding') || authError?.includes('Unable to connect to the server');
+    
     useEffect(() => {
-        setError(propError);
-    }, [propError]);
+        if (authError === "ACCOUNT_CREATED_CHECK_EMAIL") {
+            setSuccessMessage("Account created successfully! Please check your email to verify your account before logging in.");
+            setError(null);
+            setMode('signIn'); // Switch back to sign in
+        } else {
+            setError(authError);
+            setSuccessMessage(null);
+        }
+    }, [authError]);
+    
+    useEffect(() => {
+        // Clear password and errors when switching modes
+        setPassword('');
+        setError(null);
+        setSuccessMessage(null);
+        clearError();
+    }, [mode, clearError]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
         setError(null);
+        setSuccessMessage(null);
+        
         try {
-            if (isSignIn) {
-                await onSignIn({ email, password });
-            } else {
+            if (mode === 'signIn') {
+                await signIn({ email, password });
+            } else if (mode === 'signUp') {
                 if (!fullName.trim()) {
                     setError('Full name is required.');
-                    setLoading(false);
                     return;
                 }
-                await onSignUp({ email, password, role, fullName, course });
-                // After successful sign up, the onAuthStateChange listener will handle the redirect.
-                // We just need to wait.
-                setPassword(''); // Clear password for security
+                await signUp({ email, password, role, fullName, course });
             }
         } catch (err) {
-            setError(getErrorMessage(err));
-        } finally {
-            setLoading(false);
+            // Error is handled via AuthContext state, but we catch it here to prevent unhandled promise rejections
         }
     };
     
-    const toggleMode = () => {
-        setIsSignIn(!isSignIn);
-        setError(null);
+    const handleSetMode = (newMode: Mode) => {
+        setMode(newMode);
+    };
+
+    const onContinueAsGuest = () => {
+        navigate('/guest/create');
+    }
+    
+    const pageTitles = {
+        signIn: 'Welcome Back!',
+        signUp: 'Create an Account',
+    };
+    
+    const pageSubtitles = {
+        signIn: 'Sign in to continue to CardZap',
+        signUp: 'Get started with AI-powered flashcards',
     }
 
     return (
-        <div className="bg-white p-8 sm:p-10 rounded-2xl shadow-xl max-w-md w-full transition-all duration-300 border border-primary-200 animate-[fade-in_0.5s_ease-out]">
+        <div className="bg-white dark:bg-gray-800 p-6 sm:p-10 rounded-2xl shadow-xl max-w-md w-full transition-all duration-300 border border-primary-200 dark:border-gray-700 animate-[fade-in_0.5s_ease-out]">
             <style>{`
                 @keyframes fade-in {
                     from { opacity: 0; transform: scale(0.95); }
@@ -68,152 +91,161 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSignIn, onSignUp, onContinueAsG
                 }
             `}</style>
             <div className="text-center mb-6">
-                <div className="inline-block h-[164px] overflow-hidden">
-                    <CardZapLogo className="h-[164px] w-auto mt-[-25px]" />
+                <div className="inline-block h-28 sm:h-32 overflow-hidden">
+                    <CardZapLogo className="h-full w-auto mt-[-15px] sm:mt-[-20px]" />
                 </div>
-                <h1 className="text-3xl font-extrabold text-primary-700 mt-[-34px]">
-                    {isSignIn ? 'Welcome Back!' : 'Create an Account'}
+                <h1 className="text-3xl font-extrabold text-primary-700 dark:text-gray-200 mt-[-20px] sm:mt-[-24px]">
+                    {pageTitles[mode]}
                 </h1>
-                <p className="text-primary-500">{isSignIn ? 'Sign in to continue to CardZap' : 'Get started with AI-powered flashcards'}</p>
+                <p className="text-primary-500 dark:text-gray-300">{pageSubtitles[mode]}</p>
             </div>
             
-            {error && (
-                isSchemaError ? (
-                    <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-6 rounded-r-lg" role="alert">
-                        <p className="font-bold">Database Out of Sync</p>
-                        <p className="text-sm mt-1">{errorMessage}</p>
-                        <button 
-                            onClick={() => window.location.reload()}
-                            className="mt-3 flex items-center gap-2 text-sm font-semibold bg-yellow-200 text-yellow-800 rounded px-3 py-1.5 hover:bg-yellow-300"
-                        >
-                            <RefreshIcon className="w-4 h-4" />
-                            Refresh Page to Sync
-                        </button>
+            {successMessage && (
+                <div className="bg-green-100 dark:bg-green-900/30 border-l-4 border-green-500 text-green-800 dark:text-green-300 p-4 mb-6 rounded-r-lg" role="alert">
+                    <div className="flex items-start gap-3">
+                        <CheckCircleIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm font-semibold">{successMessage}</p>
                     </div>
-                ) : isConnectionError ? (
-                    <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-6 rounded-r-lg" role="alert">
+                </div>
+            )}
+
+            {error && (
+                isConnectionError ? (
+                    <div className="bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-yellow-500 dark:border-yellow-600 text-yellow-800 dark:text-yellow-300 p-4 mb-6 rounded-r-lg" role="alert">
                         <p className="font-bold">Connection Issue</p>
                         <p className="text-sm mt-1 whitespace-pre-wrap">{error}</p>
                     </div>
                 ) : (
-                    <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg relative mb-6 whitespace-pre-wrap" role="alert">{error}</div>
+                    <div className="bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg relative mb-6 whitespace-pre-wrap" role="alert">{error}</div>
                 )
             )}
             
-             <div className="flex border-b-2 border-primary-200 mb-6">
+             <div className="flex border-b-2 border-primary-200 dark:border-gray-600 mb-6">
                 <button 
-                    onClick={() => { if(!isSignIn) toggleMode() }}
-                    className={`w-1/2 py-3 text-center font-semibold transition-all duration-300 ${isSignIn ? 'text-primary-500 border-b-2 border-primary-500' : 'text-primary-400 hover:bg-primary-100'}`}
+                    onClick={() => handleSetMode('signIn')}
+                    className={`w-1/2 py-3 text-center font-semibold transition-all duration-300 ${mode === 'signIn' ? 'text-primary-500 dark:text-primary-300 border-b-2 border-primary-500 dark:border-primary-400' : 'text-primary-400 dark:text-gray-400 hover:bg-primary-100 dark:hover:bg-gray-700'}`}
                 >
                     Sign In
                 </button>
                 <button 
-                    onClick={() => { if(isSignIn) toggleMode() }}
-                    className={`w-1/2 py-3 text-center font-semibold transition-all duration-300 ${!isSignIn ? 'text-primary-500 border-b-2 border-primary-500' : 'text-primary-400 hover:bg-primary-100'}`}
+                    onClick={() => handleSetMode('signUp')}
+                    className={`w-1/2 py-3 text-center font-semibold transition-all duration-300 ${mode === 'signUp' ? 'text-primary-500 dark:text-primary-300 border-b-2 border-primary-500 dark:border-primary-400' : 'text-primary-400 dark:text-gray-400 hover:bg-primary-100 dark:hover:bg-gray-700'}`}
                 >
                     Sign Up
                 </button>
             </div>
-
+            
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-primary-600 mb-2">Email Address</label>
+                    <label htmlFor="email" className="block text-sm font-medium text-primary-600 dark:text-gray-300 mb-2">Email Address</label>
                     <input
                         id="email"
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@example.com"
-                        className="w-full bg-primary-100 border border-primary-300 rounded-md px-4 py-2 text-primary-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                        className="w-full bg-primary-100 dark:bg-gray-700 border border-primary-300 dark:border-gray-600 rounded-md px-4 py-2 text-primary-700 dark:text-gray-200 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                         required
                         disabled={loading}
                     />
                 </div>
 
-                <div>
-                    <label htmlFor="password" className="block text-sm font-medium text-primary-600 mb-2">Password</label>
-                    <input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-primary-100 border border-primary-300 rounded-md px-4 py-2 text-primary-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                        required
-                        disabled={loading}
-                    />
-                </div>
+                {(mode === 'signIn' || mode === 'signUp') && (
+                    <div>
+                        <label htmlFor="password" className="block text-sm font-medium text-primary-600 dark:text-gray-300 mb-2">Password</label>
+                        <div className="relative">
+                            <input
+                                id="password"
+                                type={showPassword ? 'text' : 'password'}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                className="w-full bg-primary-100 dark:bg-gray-700 border border-primary-300 dark:border-gray-600 rounded-md px-4 py-2 pr-10 text-primary-700 dark:text-gray-200 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                required
+                                disabled={loading}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute inset-y-0 right-0 flex items-center px-3 text-primary-500 dark:text-gray-400 hover:text-primary-700 dark:hover:text-gray-200"
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                            >
+                                <EyeIcon className="h-5 w-5" />
+                            </button>
+                        </div>
+                    </div>
+                )}
                 
-                {!isSignIn && (
+                {mode === 'signUp' && (
                     <>
                         <div>
-                            <label htmlFor="full-name" className="block text-sm font-medium text-primary-600 mb-2">Full Name</label>
+                            <label htmlFor="full-name" className="block text-sm font-medium text-primary-600 dark:text-gray-300 mb-2">Full Name</label>
                             <input
                                 id="full-name"
                                 type="text"
                                 value={fullName}
                                 onChange={(e) => setFullName(e.target.value)}
-                                placeholder="John Doe"
-                                className="w-full bg-primary-100 border border-primary-300 rounded-md px-4 py-2 text-primary-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                placeholder="Jose Cruz"
+                                className="w-full bg-primary-100 dark:bg-gray-700 border border-primary-300 dark:border-gray-600 rounded-md px-4 py-2 text-primary-700 dark:text-gray-200 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                 required
                                 disabled={loading}
                             />
                         </div>
                         <div>
-                            <label htmlFor="course" className="block text-sm font-medium text-primary-600 mb-2">Course (Optional)</label>
+                            <label htmlFor="course" className="block text-sm font-medium text-primary-600 dark:text-gray-300 mb-2">Course (Optional)</label>
                             <input
                                 id="course"
                                 type="text"
                                 value={course}
                                 onChange={(e) => setCourse(e.target.value)}
                                 placeholder="e.g. Computer Science"
-                                className="w-full bg-primary-100 border border-primary-300 rounded-md px-4 py-2 text-primary-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                className="w-full bg-primary-100 dark:bg-gray-700 border border-primary-300 dark:border-gray-600 rounded-md px-4 py-2 text-primary-700 dark:text-gray-200 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                 disabled={loading}
                             />
+                        </div>
+                        <div>
+                            <label htmlFor="role" className="block text-sm font-medium text-primary-600 dark:text-gray-300 mb-2">I am a...</label>
+                            <select
+                                id="role"
+                                value={role}
+                                onChange={(e) => setRole(e.target.value as UserRole)}
+                                className="w-full bg-primary-100 dark:bg-gray-700 border border-primary-300 dark:border-gray-600 rounded-md px-4 py-2 text-primary-700 dark:text-gray-200 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                disabled={loading}
+                            >
+                                {Object.values(UserRole).filter(r => r !== UserRole.ADMIN).map((r) => (
+                                    <option key={r} value={r}>{r}</option>
+                                ))}
+                            </select>
                         </div>
                     </>
                 )}
 
-                {!isSignIn && (
-                    <div>
-                        <label htmlFor="role" className="block text-sm font-medium text-primary-600 mb-2">I am a...</label>
-                        <select
-                            id="role"
-                            value={role}
-                            onChange={(e) => setRole(e.target.value as UserRole)}
-                            className="w-full bg-primary-100 border border-primary-300 rounded-md px-4 py-2 text-primary-700 focus:ring-2 focus:ring-primary-500 focus:outline-none"
-                            disabled={loading}
-                        >
-                            {Object.values(UserRole).filter(r => r !== UserRole.ADMIN).map((r) => (
-                                <option key={r} value={r}>{r}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
-
                 <button type="submit" className="w-full text-lg font-bold bg-gradient-to-r from-primary-400 to-primary-600 text-white rounded-lg py-3 px-6 transition-all hover:from-primary-500 hover:to-primary-700 disabled:opacity-50" disabled={loading}>
-                    {loading ? (isSignIn ? 'Signing In...' : 'Creating Account...') : (isSignIn ? 'Sign In' : 'Create Account')}
+                    {loading ? 'Processing...' :
+                     mode === 'signIn' ? 'Sign In' : 'Create Account'}
                 </button>
             </form>
             
-            <div className="mt-6 text-center">
-                <div className="relative flex py-2 items-center">
-                    <div className="flex-grow border-t border-primary-200"></div>
-                    <span className="flex-shrink mx-4 text-sm text-primary-400">OR</span>
-                    <div className="flex-grow border-t border-primary-200"></div>
+            {(mode === 'signIn' || mode === 'signUp') && (
+                <div className="mt-6 text-center">
+                    <div className="relative flex py-2 items-center">
+                        <div className="flex-grow border-t border-primary-200 dark:border-gray-600"></div>
+                        <span className="flex-shrink mx-4 text-sm text-primary-400 dark:text-gray-500">OR</span>
+                        <div className="flex-grow border-t border-primary-200 dark:border-gray-600"></div>
+                    </div>
+                    <button 
+                        onClick={onContinueAsGuest}
+                        className={`font-semibold transition-all duration-300 disabled:opacity-50 ${
+                            isConnectionError 
+                            ? 'w-full text-lg bg-primary-500 text-white rounded-lg py-3 px-6 hover:bg-primary-600'
+                            : 'text-primary-500 dark:text-primary-300 hover:text-primary-700 dark:hover:text-primary-200'
+                        }`}
+                        disabled={loading}
+                    >
+                        {isConnectionError ? 'Use App as Guest' : 'Continue as Guest'}
+                    </button>
                 </div>
-                <button 
-                    onClick={onContinueAsGuest}
-                    className={`font-semibold transition-all duration-300 disabled:opacity-50 ${
-                        isConnectionError 
-                        ? 'w-full text-lg bg-primary-500 text-white rounded-lg py-3 px-6 hover:bg-primary-600'
-                        : 'text-primary-500 hover:text-primary-700'
-                    }`}
-                    disabled={loading}
-                >
-                    {isConnectionError ? 'Use App as Guest' : 'Continue as Guest'}
-                </button>
-            </div>
+            )}
         </div>
     );
 };

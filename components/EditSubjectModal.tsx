@@ -1,25 +1,25 @@
 
-import React, { useState, useEffect } from 'react';
-import { CloseIcon, RefreshIcon, CogIcon } from './icons';
+import React, { useState } from 'react';
+import { CloseIcon } from './icons';
+import { Subject } from '../types';
 
-interface CreateSubjectModalProps {
+interface EditSubjectModalProps {
+    subject: Subject;
     onClose: () => void;
-    onCreate: (subjectData: { name: string; description?: string; image_url?: string; }) => void;
+    onUpdate: (subjectData: { title: string; description?: string; image_url?: string; }) => Promise<void>;
     isSubmitting: boolean;
     error: string | null;
-    onFixClick?: () => void;
 }
 
-const CreateSubjectModal: React.FC<CreateSubjectModalProps> = ({ onClose, onCreate, isSubmitting, error, onFixClick }) => {
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
+const EditSubjectModal: React.FC<EditSubjectModalProps> = ({ subject, onClose, onUpdate, isSubmitting, error }) => {
+    const [title, setTitle] = useState(subject.title);
+    const [description, setDescription] = useState(subject.description || '');
+    const [imagePreview, setImagePreview] = useState<string | null>(subject.image_url || null);
     const [formError, setFormError] = useState('');
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            // Basic validation for file size (e.g., 2MB)
             if (file.size > 2 * 1024 * 1024) {
                 setFormError("Image file is too large. Please select a file under 2MB.");
                 return;
@@ -34,29 +34,24 @@ const CreateSubjectModal: React.FC<CreateSubjectModalProps> = ({ onClose, onCrea
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim()) {
-            setFormError('Subject name is required.');
+        if (!title.trim()) {
+            setFormError('Subject title cannot be empty.');
             return;
         }
-        onCreate({
-            name,
-            description: description.trim() || undefined, // Send undefined if empty
+        onUpdate({
+            title,
+            description: description.trim() || undefined,
             image_url: imagePreview || undefined,
         });
     };
-
-    const isDatabaseError = error && (error.includes('Database') || error.includes('constraint') || error.includes('relation'));
-
+    
     return (
         <div 
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-[fade-in_0.3s_ease-out]"
             onClick={onClose}
         >
              <style>{`
-                @keyframes fade-in {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
+                @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
                 @keyframes slide-in-up {
                     from { opacity: 0; transform: translateY(20px) scale(0.98); }
                     to { opacity: 1; transform: translateY(0) scale(1); }
@@ -69,33 +64,22 @@ const CreateSubjectModal: React.FC<CreateSubjectModalProps> = ({ onClose, onCrea
                 <button onClick={onClose} className="absolute top-4 right-4 text-primary-400 hover:text-primary-600 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
                     <CloseIcon className="w-6 h-6" />
                 </button>
-                <h2 className="text-2xl font-bold text-primary-700 dark:text-gray-100 mb-6">Create a New Subject</h2>
+                <h2 className="text-2xl font-bold text-primary-700 dark:text-gray-100 mb-6">Edit Subject</h2>
                 
                 {error && (
-                    <div className="bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 p-3 rounded-md mb-4 text-sm whitespace-pre-wrap break-words font-mono max-h-40 overflow-y-auto">
-                        {error}
-                        {isDatabaseError && onFixClick && (
-                            <button 
-                                onClick={onFixClick}
-                                className="mt-3 flex items-center gap-2 bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-100 px-3 py-1.5 rounded-md font-bold hover:bg-red-300 dark:hover:bg-red-700 w-full justify-center transition-colors"
-                            >
-                                <CogIcon className="w-4 h-4" />
-                                Go to Settings to Fix Database
-                            </button>
-                        )}
-                    </div>
+                    <div className="bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 p-3 rounded-md mb-4">{error}</div>
                 )}
                 {formError && <div className="bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 p-3 rounded-md mb-4">{formError}</div>}
 
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label htmlFor="subject-name" className="block text-sm font-medium text-primary-600 dark:text-gray-300 mb-2">Subject Name</label>
+                        <label htmlFor="subject-title" className="block text-sm font-medium text-primary-600 dark:text-gray-300 mb-2">Subject Title</label>
                         <input
-                            id="subject-name"
+                            id="subject-title"
                             type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
                             className="w-full bg-primary-100 dark:bg-gray-700 border border-primary-300 dark:border-gray-600 rounded-md px-4 py-2 text-primary-700 dark:text-gray-200 focus:ring-2 focus:ring-primary-500 focus:outline-none"
                             placeholder="e.g., Introduction to Biology"
                             disabled={isSubmitting}
@@ -115,7 +99,7 @@ const CreateSubjectModal: React.FC<CreateSubjectModalProps> = ({ onClose, onCrea
                                 )}
                             </div>
                             <label htmlFor="file-upload" className={`relative cursor-pointer bg-white dark:bg-gray-800 rounded-md font-medium text-primary-600 dark:text-primary-300 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500 ${isSubmitting ? 'opacity-50' : ''}`}>
-                                <span>Upload a file</span>
+                                <span>Change image</span>
                                 <input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageChange} disabled={isSubmitting} />
                             </label>
                         </div>
@@ -139,7 +123,7 @@ const CreateSubjectModal: React.FC<CreateSubjectModalProps> = ({ onClose, onCrea
                             Cancel
                         </button>
                         <button type="submit" className="text-lg font-bold bg-gradient-to-r from-primary-400 to-primary-600 text-white rounded-lg py-2 px-6 transition-all hover:from-primary-500 hover:to-primary-700 disabled:opacity-50" disabled={isSubmitting}>
-                            {isSubmitting ? 'Creating...' : 'Create Subject'}
+                            {isSubmitting ? 'Saving...' : 'Save Changes'}
                         </button>
                     </div>
                 </form>
@@ -148,4 +132,4 @@ const CreateSubjectModal: React.FC<CreateSubjectModalProps> = ({ onClose, onCrea
     );
 };
 
-export default CreateSubjectModal;
+export default EditSubjectModal;

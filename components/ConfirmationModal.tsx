@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { CloseIcon } from './icons';
 
 interface ConfirmationModalProps {
@@ -34,22 +35,24 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 }
             `}</style>
             <div 
-                className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md relative animate-[slide-in-up_0.3s_ease-out]"
+                className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-md relative animate-[slide-in-up_0.3s_ease-out]"
                 onClick={(e) => e.stopPropagation()}
             >
-                <button onClick={onCancel} className="absolute top-4 right-4 text-primary-400 hover:text-primary-600 transition-colors">
+                <button onClick={onCancel} className="absolute top-4 right-4 text-primary-400 hover:text-primary-600 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
                     <CloseIcon className="w-6 h-6" />
                 </button>
-                <h2 className="text-2xl font-bold text-red-600 mb-4">{title}</h2>
-                <p className="text-primary-600 mb-6">{message}</p>
+                <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">{title}</h2>
+                <p className="text-primary-600 dark:text-gray-300 mb-6">{message}</p>
                 
-                {error && <div className="bg-red-100 border border-red-300 text-red-700 p-3 rounded-md mb-4">{error}</div>}
+                {error && (
+                    <div className="bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 p-3 rounded-md mb-4">{error}</div>
+                )}
 
                 <div className="flex justify-end gap-4 pt-4">
                     <button 
                         type="button" 
                         onClick={onCancel} 
-                        className="text-lg font-bold bg-primary-200 text-primary-600 rounded-lg py-2 px-6 transition-all hover:bg-primary-300/80" 
+                        className="text-lg font-bold bg-primary-200 dark:bg-gray-700 text-primary-600 dark:text-gray-300 rounded-lg py-2 px-6 transition-all hover:bg-primary-300/80 dark:hover:bg-gray-600" 
                         disabled={isConfirming}
                     >
                         Cancel

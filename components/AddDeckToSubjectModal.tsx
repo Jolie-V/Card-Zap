@@ -1,24 +1,26 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CloseIcon } from './icons';
-import { Deck, Subject, User } from '../types';
+import { Deck, Subject } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { getErrorMessage } from '../utils';
+import { useAuth } from './AuthProvider';
 
 interface AddDeckToSubjectModalProps {
     onClose: () => void;
     onDecksAdded: () => void;
     subject: Subject;
-    user: User;
 }
 
-const AddDeckToSubjectModal: React.FC<AddDeckToSubjectModalProps> = ({ onClose, onDecksAdded, subject, user }) => {
+const AddDeckToSubjectModal: React.FC<AddDeckToSubjectModalProps> = ({ onClose, onDecksAdded, subject }) => {
+    const { user } = useAuth();
     const [availableDecks, setAvailableDecks] = useState<Deck[]>([]);
-    const [selectedDeckIds, setSelectedDeckIds] = useState<Set<number>>(new Set());
+    const [selectedDeckIds, setSelectedDeckIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (!user) return;
         const fetchDecks = async () => {
             setIsLoading(true);
             setError(null);
@@ -34,10 +36,11 @@ const AddDeckToSubjectModal: React.FC<AddDeckToSubjectModalProps> = ({ onClose, 
                 const { data: assignedDecks, error: assignedDecksError } = await supabase
                     .from('subject_decks')
                     .select('deck_id')
-                    .eq('subject_id', subject.id);
+                    .eq('subject_id', parseInt(subject.id, 10));
                 if (assignedDecksError) throw assignedDecksError;
                 
-                const assignedDeckIds = new Set(assignedDecks.map(d => d.deck_id));
+                // Convert deck_id to string to match Deck.id type
+                const assignedDeckIds = new Set(assignedDecks.map(d => String(d.deck_id)));
                 
                 // Filter out decks that are already assigned
                 const unassignedDecks = (allDecks || []).filter(deck => !assignedDeckIds.has(deck.id));
@@ -51,9 +54,9 @@ const AddDeckToSubjectModal: React.FC<AddDeckToSubjectModalProps> = ({ onClose, 
         };
 
         fetchDecks();
-    }, [user.id, subject.id]);
+    }, [user, subject.id]);
 
-    const handleToggleDeck = (deckId: number) => {
+    const handleToggleDeck = (deckId: string) => {
         setSelectedDeckIds(prev => {
             const newSet = new Set(prev);
             if (newSet.has(deckId)) {
@@ -76,8 +79,8 @@ const AddDeckToSubjectModal: React.FC<AddDeckToSubjectModalProps> = ({ onClose, 
         
         try {
             const decksToAdd = Array.from(selectedDeckIds).map(deck_id => ({
-                subject_id: subject.id,
-                deck_id: deck_id,
+                subject_id: parseInt(subject.id, 10),
+                deck_id: parseInt(deck_id as string, 10), // Ensure it is an integer for the DB
             }));
 
             const { error: insertError } = await supabase.from('subject_decks').insert(decksToAdd);

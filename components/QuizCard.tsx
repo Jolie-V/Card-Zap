@@ -15,7 +15,7 @@ const QuizCard: React.FC<QuizCardProps> = ({ card, onAnswer, color }) => {
     const handleOptionClick = (option: string) => {
         if (isAnswered) return;
         
-        const isCorrect = option === card.correctAnswer;
+        const isCorrect = option === card.correctanswer;
         setSelectedAnswer(option);
         setIsAnswered(true);
         onAnswer(isCorrect);
@@ -25,15 +25,15 @@ const QuizCard: React.FC<QuizCardProps> = ({ card, onAnswer, color }) => {
 
     const getOptionClass = (option: string) => {
         if (!isAnswered) {
-            return 'bg-white hover:bg-primary-100 text-primary-600 border border-primary-300';
+            return 'bg-white dark:bg-gray-700 hover:bg-primary-100 dark:hover:bg-gray-600 text-primary-600 dark:text-gray-300 border border-primary-300 dark:border-gray-500';
         }
-        if (option === card.correctAnswer) {
+        if (option === card.correctanswer) {
             return 'bg-green-600 text-white ring-2 ring-green-400 border-green-600';
         }
         if (option === selectedAnswer) {
             return 'bg-red-600 text-white ring-2 ring-red-400 border-red-600';
         }
-        return 'bg-white text-primary-600 opacity-70 border border-primary-300';
+        return 'bg-white dark:bg-gray-700 text-primary-600 dark:text-gray-300 opacity-70 border border-primary-300 dark:border-gray-500';
     };
 
     return (
@@ -44,7 +44,7 @@ const QuizCard: React.FC<QuizCardProps> = ({ card, onAnswer, color }) => {
                     to { transform: translateY(0) scale(1); opacity: 1; }
                 }
             `}</style>
-            <div className={`w-full h-64 ${colorClasses.bg} rounded-2xl shadow-2xl p-8 flex items-center justify-center text-center mb-8`}>
+            <div className={`w-full h-72 ${colorClasses.bg} rounded-2xl shadow-2xl p-8 flex items-center justify-center text-center mb-8`}>
                 <p className={`text-2xl font-semibold ${colorClasses.text}`}>{card.question}</p>
             </div>
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
