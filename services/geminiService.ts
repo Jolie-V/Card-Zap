@@ -1,11 +1,18 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ClassicFlashcard, GameMode, QuizFlashcard } from '../types';
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable is not set");
-}
+let aiClient: GoogleGenAI | null = null;
 
-export const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+function getAiClient(): GoogleGenAI {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY environment variable is required but not set.");
+    }
+    aiClient = new GoogleGenAI({ apiKey });
+  }
+  return aiClient;
+}
 
 const classicSchema = {
   type: Type.ARRAY,
@@ -81,7 +88,7 @@ Generation ID: ${Date.now()}`;
   let rawResponseText = "";
 
   try {
-    const stream = await ai.models.generateContentStream({
+    const stream = await getAiClient().models.generateContentStream({
       model,
       contents: prompt,
       config: {
